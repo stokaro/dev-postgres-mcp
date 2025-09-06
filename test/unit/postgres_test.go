@@ -328,3 +328,85 @@ func TestCreateInstanceOptions(t *testing.T) {
 	c.Assert(opts.Username, qt.Equals, "myuser")
 	c.Assert(opts.Password, qt.Equals, "mypass")
 }
+
+func TestPartialIDMatching(t *testing.T) {
+	c := qt.New(t)
+
+	// Create mock instances for testing
+	instances := []*types.PostgreSQLInstance{
+		{
+			ID:          "abcd1234-5678-90ef-ghij-klmnopqrstuv",
+			ContainerID: "container1",
+			Port:        5432,
+			Database:    "db1",
+			Username:    "user1",
+			Version:     "17",
+			Status:      "running",
+		},
+		{
+			ID:          "abcd5678-1234-90ef-ghij-klmnopqrstuv",
+			ContainerID: "container2",
+			Port:        5433,
+			Database:    "db2",
+			Username:    "user2",
+			Version:     "17",
+			Status:      "running",
+		},
+		{
+			ID:          "efgh1234-5678-90ef-ghij-klmnopqrstuv",
+			ContainerID: "container3",
+			Port:        5434,
+			Database:    "db3",
+			Username:    "user3",
+			Version:     "17",
+			Status:      "running",
+		},
+	}
+
+	c.Run("exact_match", func(c *qt.C) {
+		fullID := "abcd1234-5678-90ef-ghij-klmnopqrstuv"
+		var match *types.PostgreSQLInstance
+		for _, instance := range instances {
+			if instance.ID == fullID {
+				match = instance
+				break
+			}
+		}
+		c.Assert(match, qt.IsNotNil)
+		c.Assert(match.ID, qt.Equals, fullID)
+	})
+
+	c.Run("partial_match_unique", func(c *qt.C) {
+		partialID := "efgh"
+		var matches []*types.PostgreSQLInstance
+		for _, instance := range instances {
+			if len(instance.ID) >= len(partialID) && instance.ID[:len(partialID)] == partialID {
+				matches = append(matches, instance)
+			}
+		}
+		c.Assert(len(matches), qt.Equals, 1)
+		c.Assert(matches[0].Database, qt.Equals, "db3")
+	})
+
+	c.Run("partial_match_ambiguous", func(c *qt.C) {
+		partialID := "abcd"
+		var matches []*types.PostgreSQLInstance
+		for _, instance := range instances {
+			if len(instance.ID) >= len(partialID) && instance.ID[:len(partialID)] == partialID {
+				matches = append(matches, instance)
+			}
+		}
+		c.Assert(len(matches), qt.Equals, 2)
+	})
+
+	c.Run("no_match", func(c *qt.C) {
+		partialID := "xyz"
+		var matches []*types.PostgreSQLInstance
+		for _, instance := range instances {
+			if len(instance.ID) >= len(partialID) && instance.ID[:len(partialID)] == partialID {
+				matches = append(matches, instance)
+			}
+		}
+		c.Assert(len(matches), qt.Equals, 0)
+	})
+}

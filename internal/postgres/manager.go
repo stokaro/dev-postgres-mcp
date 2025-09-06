@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -182,9 +183,9 @@ func (m *Manager) ListInstances(ctx context.Context) ([]*types.PostgreSQLInstanc
 	return instances, nil
 }
 
-// GetInstance returns a specific PostgreSQL instance by ID.
+// GetInstance returns a specific PostgreSQL instance by ID (supports partial ID matching).
 func (m *Manager) GetInstance(ctx context.Context, id string) (*types.PostgreSQLInstance, error) {
-	// First check in-memory instances (for MCP server context)
+	// First try exact match in-memory instances (for MCP server context)
 	m.mu.RLock()
 	if instance, exists := m.instances[id]; exists {
 		m.mu.RUnlock()
@@ -203,19 +204,41 @@ func (m *Manager) GetInstance(ctx context.Context, id string) (*types.PostgreSQL
 	}
 	m.mu.RUnlock()
 
-	// If not found in memory, discover from Docker containers (for CLI context)
-	instances, err := m.ListInstances(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to discover instances: %w", err)
+	// If not found in memory, try partial ID matching (for CLI context or partial IDs)
+	return m.FindInstanceByPartialID(ctx, id)
+}
+
+// FindInstanceByPartialID finds an instance by partial ID match (like Docker's container ID matching).
+// Returns the instance if exactly one match is found, or an error if no matches or multiple matches.
+func (m *Manager) FindInstanceByPartialID(ctx context.Context, partialID string) (*types.PostgreSQLInstance, error) {
+	if partialID == "" {
+		return nil, fmt.Errorf("instance ID cannot be empty")
 	}
 
+	instances, err := m.ListInstances(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list instances: %w", err)
+	}
+
+	var matches []*types.PostgreSQLInstance
 	for _, instance := range instances {
-		if instance.ID == id {
-			return instance, nil
+		if strings.HasPrefix(instance.ID, partialID) {
+			matches = append(matches, instance)
 		}
 	}
 
-	return nil, fmt.Errorf("instance %s not found", id)
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("no such instance: %s", partialID)
+	case 1:
+		return matches[0], nil
+	default:
+		var ids []string
+		for _, match := range matches {
+			ids = append(ids, match.ID[:12]) // Show first 12 chars like Docker
+		}
+		return nil, fmt.Errorf("multiple instances found with prefix %s: %s", partialID, strings.Join(ids, ", "))
+	}
 }
 
 // DropInstance removes a PostgreSQL instance.
@@ -273,14 +296,11 @@ func (m *Manager) DropInstance(ctx context.Context, id string) error {
 	return nil
 }
 
-// HealthCheck performs a health check on a PostgreSQL instance.
+// HealthCheck performs a health check on a PostgreSQL instance (supports partial ID matching).
 func (m *Manager) HealthCheck(ctx context.Context, id string) (*docker.HealthCheck, error) {
-	m.mu.RLock()
-	instance, exists := m.instances[id]
-	m.mu.RUnlock()
-
-	if !exists {
-		return nil, fmt.Errorf("instance %s not found", id)
+	instance, err := m.GetInstance(ctx, id)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create health checker

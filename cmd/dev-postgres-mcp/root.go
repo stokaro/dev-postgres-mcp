@@ -257,8 +257,8 @@ func outputInstancesTable(instances []*types.PostgreSQLInstance) error {
 	// Rows
 	for _, instance := range instances {
 		fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
-			instance.ID[:8]+"...", // Truncate ID for display
-			instance.ContainerID[:12]+"...", // Truncate container ID
+			instance.ID, // Show full ID like Docker
+			instance.ContainerID, // Show full container ID like Docker
 			instance.Port,
 			instance.Database,
 			instance.Username,

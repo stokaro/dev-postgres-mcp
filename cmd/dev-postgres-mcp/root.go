@@ -327,7 +327,7 @@ func runDatabaseList(format string, startPort, endPort int, dbType string) error
 			instances = []*types.DatabaseInstance{}
 		}
 		// Create JSON response with count and instances
-		response := map[string]interface{}{
+		response := map[string]any{
 			"count":     len(instances),
 			"instances": instances,
 		}

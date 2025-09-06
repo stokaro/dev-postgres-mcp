@@ -15,7 +15,7 @@ import (
 )
 
 // Helper function to call MCP tools
-func callTool(ctx context.Context, toolHandler *mcp.ToolHandler, name string, arguments map[string]interface{}) (*mcplib.CallToolResult, error) {
+func callTool(ctx context.Context, toolHandler *mcp.ToolHandler, name string, arguments map[string]any) (*mcplib.CallToolResult, error) {
 	request := mcplib.CallToolRequest{
 		Params: mcplib.CallToolParams{
 			Name:      name,
@@ -57,7 +57,7 @@ func TestMCPToolHandler(t *testing.T) {
 
 	// Test create_postgres_instance tool
 	c.Run("create_postgres_instance", func(c *qt.C) {
-		arguments := map[string]interface{}{
+		arguments := map[string]any{
 			"version":  "17",
 			"database": "testdb",
 			"username": "testuser",
@@ -94,7 +94,7 @@ func TestMCPToolHandler(t *testing.T) {
 		defer postgresManager.DropInstance(ctx, instance.ID)
 
 		// Test list tool
-		result, err := callTool(ctx, toolHandler, "list_postgres_instances", map[string]interface{}{})
+		result, err := callTool(ctx, toolHandler, "list_postgres_instances", map[string]any{})
 		c.Assert(err, qt.IsNil)
 		c.Assert(result.IsError, qt.IsFalse)
 		c.Assert(len(result.Content) > 0, qt.IsTrue)
@@ -116,7 +116,7 @@ func TestMCPToolHandler(t *testing.T) {
 		defer postgresManager.DropInstance(ctx, instance.ID)
 
 		// Test get tool
-		arguments := map[string]interface{}{
+		arguments := map[string]any{
 			"instance_id": instance.ID,
 		}
 
@@ -146,7 +146,7 @@ func TestMCPToolHandler(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		// Test health check tool
-		arguments := map[string]interface{}{
+		arguments := map[string]any{
 			"instance_id": instance.ID,
 		}
 
@@ -171,7 +171,7 @@ func TestMCPToolHandler(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 
 		// Test drop tool
-		arguments := map[string]interface{}{
+		arguments := map[string]any{
 			"instance_id": instance.ID,
 		}
 
@@ -207,21 +207,21 @@ func TestMCPToolHandlerErrors(t *testing.T) {
 	toolHandler := mcp.NewToolHandler(postgresManager)
 
 	c.Run("unknown_tool", func(c *qt.C) {
-		result, err := callTool(ctx, toolHandler, "unknown_tool", map[string]interface{}{})
+		result, err := callTool(ctx, toolHandler, "unknown_tool", map[string]any{})
 		c.Assert(err, qt.IsNil)
 		c.Assert(result.IsError, qt.IsTrue)
 		c.Assert(getTextContent(result, 0), qt.Contains, "Unknown tool")
 	})
 
 	c.Run("get_instance_missing_id", func(c *qt.C) {
-		result, err := callTool(ctx, toolHandler, "get_postgres_instance", map[string]interface{}{})
+		result, err := callTool(ctx, toolHandler, "get_postgres_instance", map[string]any{})
 		c.Assert(err, qt.IsNil)
 		c.Assert(result.IsError, qt.IsTrue)
 		c.Assert(getTextContent(result, 0), qt.Contains, "instance_id is required")
 	})
 
 	c.Run("get_instance_not_found", func(c *qt.C) {
-		arguments := map[string]interface{}{
+		arguments := map[string]any{
 			"instance_id": "nonexistent-id",
 		}
 
@@ -232,14 +232,14 @@ func TestMCPToolHandlerErrors(t *testing.T) {
 	})
 
 	c.Run("drop_instance_missing_id", func(c *qt.C) {
-		result, err := callTool(ctx, toolHandler, "drop_postgres_instance", map[string]interface{}{})
+		result, err := callTool(ctx, toolHandler, "drop_postgres_instance", map[string]any{})
 		c.Assert(err, qt.IsNil)
 		c.Assert(result.IsError, qt.IsTrue)
 		c.Assert(getTextContent(result, 0), qt.Contains, "instance_id is required")
 	})
 
 	c.Run("drop_instance_not_found", func(c *qt.C) {
-		arguments := map[string]interface{}{
+		arguments := map[string]any{
 			"instance_id": "nonexistent-id",
 		}
 
@@ -250,7 +250,7 @@ func TestMCPToolHandlerErrors(t *testing.T) {
 	})
 
 	c.Run("health_check_missing_id", func(c *qt.C) {
-		result, err := callTool(ctx, toolHandler, "health_check_postgres", map[string]interface{}{})
+		result, err := callTool(ctx, toolHandler, "health_check_postgres", map[string]any{})
 		c.Assert(err, qt.IsNil)
 		c.Assert(result.IsError, qt.IsTrue)
 		c.Assert(getTextContent(result, 0), qt.Contains, "instance_id is required")

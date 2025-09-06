@@ -41,11 +41,11 @@ func TestBasicWorkflow(t *testing.T) {
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 
-		var result map[string]interface{}
+		var result map[string]any
 		err = json.Unmarshal(output, &result)
 		c.Assert(err, qt.IsNil)
 		c.Assert(result["count"], qt.Equals, float64(0))
-		instances := result["instances"].([]interface{})
+		instances := result["instances"].([]any)
 		c.Assert(len(instances), qt.Equals, 0)
 
 		// Step 2: Test version command
@@ -186,11 +186,11 @@ func TestOutputFormats(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 
 		// Should be valid JSON
-		var result map[string]interface{}
+		var result map[string]any
 		err = json.Unmarshal(output, &result)
 		c.Assert(err, qt.IsNil)
 		c.Assert(result["count"], qt.Equals, float64(0))
-		instances := result["instances"].([]interface{})
+		instances := result["instances"].([]any)
 		c.Assert(len(instances), qt.Equals, 0) // No instances running
 	})
 }

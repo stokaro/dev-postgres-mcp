@@ -176,7 +176,7 @@ func GetHostPortFromDSN(dsn string) (string, int, error) {
 }
 
 // GetCredentialsFromDSN extracts the username and password from a DSN.
-func GetCredentialsFromDSN(dsn string) (string, string, error) {
+func GetCredentialsFromDSN(dsn string) (username, password string, err error) {
 	config, err := ParseDSN(dsn)
 	if err != nil {
 		return "", "", err

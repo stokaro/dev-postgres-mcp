@@ -59,10 +59,10 @@ func (h *ToolHandler) HandleTool(ctx context.Context, request mcp.CallToolReques
 	arguments := request.Params.Arguments
 	slog.Info("Handling MCP tool call", "tool", name, "arguments", arguments)
 
-	// Convert arguments to map[string]interface{}
-	args, ok := arguments.(map[string]interface{})
+	// Convert arguments to map[string]any
+	args, ok := arguments.(map[string]any)
 	if !ok {
-		args = make(map[string]interface{})
+		args = make(map[string]any)
 	}
 
 	switch name {
@@ -82,7 +82,7 @@ func (h *ToolHandler) HandleTool(ctx context.Context, request mcp.CallToolReques
 }
 
 // handleCreateInstance handles the create_postgres_instance tool call.
-func (h *ToolHandler) handleCreateInstance(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func (h *ToolHandler) handleCreateInstance(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
 	opts := types.CreateInstanceOptions{}
 
 	// Parse arguments
@@ -106,7 +106,7 @@ func (h *ToolHandler) handleCreateInstance(ctx context.Context, arguments map[st
 	}
 
 	// Format response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"instance_id":  instance.ID,
 		"container_id": instance.ContainerID,
 		"port":         instance.Port,
@@ -128,7 +128,7 @@ func (h *ToolHandler) handleCreateInstance(ctx context.Context, arguments map[st
 }
 
 // handleListInstances handles the list_postgres_instances tool call.
-func (h *ToolHandler) handleListInstances(ctx context.Context, _ map[string]interface{}) (*mcp.CallToolResult, error) {
+func (h *ToolHandler) handleListInstances(ctx context.Context, _ map[string]any) (*mcp.CallToolResult, error) {
 	instances, err := h.manager.ListInstances(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to list PostgreSQL instances: %v", err)), nil
@@ -139,7 +139,7 @@ func (h *ToolHandler) handleListInstances(ctx context.Context, _ map[string]inte
 	}
 
 	// Format response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"count":     len(instances),
 		"instances": instances,
 	}
@@ -153,7 +153,7 @@ func (h *ToolHandler) handleListInstances(ctx context.Context, _ map[string]inte
 }
 
 // handleGetInstance handles the get_postgres_instance tool call.
-func (h *ToolHandler) handleGetInstance(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func (h *ToolHandler) handleGetInstance(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
 	instanceID, ok := arguments["instance_id"].(string)
 	if !ok || instanceID == "" {
 		return mcp.NewToolResultError("instance_id is required and must be a string"), nil
@@ -173,7 +173,7 @@ func (h *ToolHandler) handleGetInstance(ctx context.Context, arguments map[strin
 }
 
 // handleDropInstance handles the drop_postgres_instance tool call.
-func (h *ToolHandler) handleDropInstance(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func (h *ToolHandler) handleDropInstance(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
 	instanceID, ok := arguments["instance_id"].(string)
 	if !ok || instanceID == "" {
 		return mcp.NewToolResultError("instance_id is required and must be a string"), nil
@@ -188,7 +188,7 @@ func (h *ToolHandler) handleDropInstance(ctx context.Context, arguments map[stri
 }
 
 // handleHealthCheck handles the health_check_postgres tool call.
-func (h *ToolHandler) handleHealthCheck(ctx context.Context, arguments map[string]interface{}) (*mcp.CallToolResult, error) {
+func (h *ToolHandler) handleHealthCheck(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
 	instanceID, ok := arguments["instance_id"].(string)
 	if !ok || instanceID == "" {
 		return mcp.NewToolResultError("instance_id is required and must be a string"), nil

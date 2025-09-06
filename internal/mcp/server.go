@@ -23,11 +23,11 @@ type Server struct {
 
 // ServerConfig holds configuration for the MCP server.
 type ServerConfig struct {
-	Name        string
-	Version     string
-	StartPort   int
-	EndPort     int
-	LogLevel    string
+	Name      string
+	Version   string
+	StartPort int
+	EndPort   int
+	LogLevel  string
 }
 
 // NewServer creates a new MCP server.
@@ -105,17 +105,17 @@ func (s *Server) GetInstanceCount() int {
 }
 
 // GetServerInfo returns information about the MCP server.
-func (s *Server) GetServerInfo() map[string]interface{} {
-	return map[string]interface{}{
+func (s *Server) GetServerInfo() map[string]any {
+	return map[string]any{
 		"name":    "dev-postgres-mcp",
 		"version": "1.0.0",
 	}
 }
 
 // GetServerCapabilities returns the capabilities of the MCP server.
-func (s *Server) GetServerCapabilities() map[string]interface{} {
-	return map[string]interface{}{
-		"tools": map[string]interface{}{
+func (s *Server) GetServerCapabilities() map[string]any {
+	return map[string]any{
+		"tools": map[string]any{
 			"listChanged": false,
 		},
 	}

@@ -185,7 +185,7 @@ WARNING: This action is irreversible. All data in the instance will be lost.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			instanceID := args[0]
-			return runPostgresDrop(instanceID, startPort, endPort, force)
+			return runPostgresDrop(instanceID, startPort, endPort, DropOptions{Force: force})
 		},
 	}
 
@@ -235,7 +235,7 @@ func runPostgresList(format string, startPort, endPort int) error {
 func outputInstancesJSON(instances []*types.PostgreSQLInstance) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(map[string]interface{}{
+	return encoder.Encode(map[string]any{
 		"count":     len(instances),
 		"instances": instances,
 	})
@@ -257,7 +257,7 @@ func outputInstancesTable(instances []*types.PostgreSQLInstance) error {
 	// Rows
 	for _, instance := range instances {
 		fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
-			instance.ID[:12], // Show short ID like Docker (12 chars)
+			instance.ID[:12],          // Show short ID like Docker (12 chars)
 			instance.ContainerID[:12], // Show short container ID like Docker (12 chars)
 			instance.Port,
 			instance.Database,
@@ -271,8 +271,13 @@ func outputInstancesTable(instances []*types.PostgreSQLInstance) error {
 	return nil
 }
 
+// DropOptions contains options for dropping PostgreSQL instances.
+type DropOptions struct {
+	Force bool
+}
+
 // runPostgresDrop drops a PostgreSQL instance.
-func runPostgresDrop(instanceID string, startPort, endPort int, force bool) error {
+func runPostgresDrop(instanceID string, startPort, endPort int, opts DropOptions) error {
 	// Create Docker manager
 	dockerMgr, err := docker.NewManager(startPort, endPort)
 	if err != nil {
@@ -296,7 +301,7 @@ func runPostgresDrop(instanceID string, startPort, endPort int, force bool) erro
 	}
 
 	// Confirmation prompt unless force is used
-	if !force {
+	if !opts.Force {
 		fmt.Printf("WARNING: This will permanently delete PostgreSQL instance %s and all its data.\n", instanceID)
 		fmt.Printf("Instance details:\n")
 		fmt.Printf("  ID: %s\n", instance.ID)

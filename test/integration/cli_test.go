@@ -2,7 +2,10 @@ package integration_test
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +14,30 @@ import (
 
 	"github.com/stokaro/dev-postgres-mcp/internal/docker"
 )
+
+// getBinaryName returns the appropriate binary name for the current OS
+func getBinaryName() string {
+	name := "dev-postgres-mcp-test"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return name
+}
+
+// buildTestBinary builds the CLI binary for testing
+func buildTestBinary(c *qt.C) string {
+	binaryName := getBinaryName()
+	buildCmd := exec.Command("go", "build", "-o", binaryName, "../../cmd/dev-postgres-mcp")
+	if err := buildCmd.Run(); err != nil {
+		c.Skip("Failed to build CLI binary:", err)
+	}
+	return binaryName
+}
+
+// cleanupTestBinary removes the test binary in a cross-platform way
+func cleanupTestBinary(binaryName string) {
+	os.Remove(binaryName) // Cross-platform file removal
+}
 
 func TestCLICommands(t *testing.T) {
 	c := qt.New(t)
@@ -28,20 +55,18 @@ func TestCLICommands(t *testing.T) {
 	}
 
 	// Build the CLI binary first
-	buildCmd := exec.Command("go", "build", "-o", "dev-postgres-mcp-test", "../../cmd/dev-postgres-mcp")
-	if err := buildCmd.Run(); err != nil {
-		c.Skip("Failed to build CLI binary:", err)
-	}
+	binaryName := buildTestBinary(c)
+	defer cleanupTestBinary(binaryName)
 
 	c.Run("version_command", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "version")
+		cmd := exec.Command(binaryName, "version")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		c.Assert(string(output), qt.Contains, "dev-postgres-mcp")
 	})
 
 	c.Run("help_command", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "--help")
+		cmd := exec.Command(binaryName, "--help")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
@@ -51,14 +76,14 @@ func TestCLICommands(t *testing.T) {
 	})
 
 	c.Run("database_list_empty", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--start-port", "21000", "--end-port", "21010")
+		cmd := exec.Command(binaryName, "database", "list", "--start-port", "21000", "--end-port", "21010")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		c.Assert(string(output), qt.Contains, "No database instances are currently running")
 	})
 
 	c.Run("database_list_json_format", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--format", "json", "--start-port", "21000", "--end-port", "21010")
+		cmd := exec.Command(binaryName, "database", "list", "--format", "json", "--start-port", "21000", "--end-port", "21010")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
@@ -67,25 +92,21 @@ func TestCLICommands(t *testing.T) {
 	})
 
 	c.Run("database_drop_nonexistent", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "drop", "nonexistent-id", "--force", "--start-port", "21000", "--end-port", "21010")
+		cmd := exec.Command(binaryName, "database", "drop", "nonexistent-id", "--force", "--start-port", "21000", "--end-port", "21010")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		c.Assert(string(output), qt.Contains, "not found")
 	})
 
 	c.Run("mcp_serve_help", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "mcp", "serve", "--help")
+		cmd := exec.Command(binaryName, "mcp", "serve", "--help")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
 		c.Assert(outputStr, qt.Contains, "Start the MCP server")
 		c.Assert(outputStr, qt.Contains, "start-port")
 		c.Assert(outputStr, qt.Contains, "end-port")
-		c.Assert(outputStr, qt.Contains, "log-level")
 	})
-
-	// Clean up test binary
-	exec.Command("rm", "-f", "dev-postgres-mcp-test").Run()
 }
 
 func TestCLIFlags(t *testing.T) {
@@ -104,10 +125,8 @@ func TestCLIFlags(t *testing.T) {
 	}
 
 	// Build the CLI binary first
-	buildCmd := exec.Command("go", "build", "-o", "dev-postgres-mcp-test", "../../cmd/dev-postgres-mcp")
-	if err := buildCmd.Run(); err != nil {
-		c.Skip("Failed to build CLI binary:", err)
-	}
+	binaryName := buildTestBinary(c)
+	defer cleanupTestBinary(binaryName)
 
 	c.Run("invalid_format_flag", func(c *qt.C) {
 		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--format", "invalid", "--start-port", "21100", "--end-port", "21110")

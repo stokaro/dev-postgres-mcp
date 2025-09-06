@@ -112,7 +112,7 @@ func TestCLICommands(t *testing.T) {
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
-		c.Assert(outputStr, qt.Contains, "Start the MCP server")
+		c.Assert(outputStr, qt.Contains, "Start the Model Context Protocol server")
 		c.Assert(outputStr, qt.Contains, "start-port")
 		c.Assert(outputStr, qt.Contains, "end-port")
 	})

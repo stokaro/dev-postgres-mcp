@@ -319,20 +319,28 @@ func runDatabaseList(format string, startPort, endPort int, dbType string) error
 		return fmt.Errorf("failed to list instances: %w", err)
 	}
 
-	if len(instances) == 0 {
-		fmt.Println("No database instances are currently running.")
-		return nil
-	}
-
 	// Format output
 	switch format {
 	case "json":
-		output, err := json.MarshalIndent(instances, "", "  ")
+		// Ensure instances is an empty array instead of null when empty
+		if instances == nil {
+			instances = []*types.DatabaseInstance{}
+		}
+		// Create JSON response with count and instances
+		response := map[string]interface{}{
+			"count":     len(instances),
+			"instances": instances,
+		}
+		output, err := json.MarshalIndent(response, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal instances to JSON: %w", err)
 		}
 		fmt.Println(string(output))
 	case "table":
+		if len(instances) == 0 {
+			fmt.Println("No database instances are currently running.")
+			return nil
+		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "ID\tTYPE\tPORT\tDATABASE\tSTATUS\tCREATED")
 		for _, instance := range instances {

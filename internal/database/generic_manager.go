@@ -65,7 +65,7 @@ func GetDatabaseConfig(dbType types.DatabaseType) DatabaseConfig {
 				"MYSQL_DATABASE":      "{{.Database}}",
 				"MYSQL_ROOT_PASSWORD": "{{.Password}}",
 			},
-			HealthCheckCommand: []string{"CMD-SHELL", "mysqladmin ping -h localhost -u root -p{{.Password}}"},
+			HealthCheckCommand: []string{"CMD-SHELL", "mariadb-admin ping -h localhost -u root -p{{.Password}}"},
 			ContainerPort:      "3306/tcp",
 		}
 	case types.DatabaseTypeMariaDB:
@@ -79,7 +79,7 @@ func GetDatabaseConfig(dbType types.DatabaseType) DatabaseConfig {
 				"MARIADB_DATABASE":      "{{.Database}}",
 				"MARIADB_ROOT_PASSWORD": "{{.Password}}",
 			},
-			HealthCheckCommand: []string{"CMD-SHELL", "mysqladmin ping -h localhost -u root -p{{.Password}}"},
+			HealthCheckCommand: []string{"CMD-SHELL", "mariadb -u root -p{{.Password}} -e 'SELECT 1' || mysqladmin ping -h localhost -u root -p{{.Password}}"},
 			ContainerPort:      "3306/tcp",
 		}
 	default:

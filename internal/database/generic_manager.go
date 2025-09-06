@@ -65,7 +65,7 @@ func GetDatabaseConfig(dbType types.DatabaseType) DatabaseConfig {
 				"MYSQL_DATABASE":      "{{.Database}}",
 				"MYSQL_ROOT_PASSWORD": "{{.Password}}",
 			},
-			HealthCheckCommand: []string{"CMD-SHELL", "mariadb-admin ping -h localhost -u root -p{{.Password}}"},
+			HealthCheckCommand: []string{"CMD-SHELL", "mysqladmin ping -u root -p{{.Password}} --silent"},
 			ContainerPort:      "3306/tcp",
 		}
 	case types.DatabaseTypeMariaDB:
@@ -474,7 +474,7 @@ func (m *GenericManager) createContainer(ctx context.Context, instanceID string,
 	}
 
 	// Wait for container to be healthy
-	if err := m.waitForHealthy(ctx, containerID, 60*time.Second); err != nil {
+	if err := m.waitForHealthy(ctx, containerID, 120*time.Second); err != nil {
 		// Clean up on failure
 		_ = m.docker.RemoveContainer(ctx, containerID)
 		return nil, fmt.Errorf("%s container failed to become healthy: %w", m.config.Type, err)

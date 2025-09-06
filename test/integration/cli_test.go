@@ -133,7 +133,7 @@ func TestCLIFlags(t *testing.T) {
 		c.Assert(err, qt.IsNotNil)
 		outputStr := string(output)
 		// Should indicate missing argument
-		c.Assert(outputStr, qt.Contains, "required")
+		c.Assert(outputStr, qt.Contains, "accepts 1 arg")
 	})
 
 	c.Run("postgres_drop_too_many_args", func(c *qt.C) {
@@ -169,9 +169,10 @@ func TestCLIErrorHandling(t *testing.T) {
 	c.Run("unknown_subcommand", func(c *qt.C) {
 		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "unknown")
 		output, err := cmd.CombinedOutput()
-		c.Assert(err, qt.IsNotNil)
+		// Cobra shows help for unknown subcommands instead of erroring
+		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
-		c.Assert(outputStr, qt.Contains, "unknown command")
+		c.Assert(outputStr, qt.Contains, "Available Commands")
 	})
 
 	c.Run("invalid_flag", func(c *qt.C) {

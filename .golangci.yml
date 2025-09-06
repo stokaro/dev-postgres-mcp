@@ -238,6 +238,9 @@ linters:
         linters:
           - gochecknoinits
           - forbidigo
+      - text: 'var-naming: avoid meaningless package names'
+        linters:
+          - revive
     paths:
       - 'third_party$'
       - 'builtin$'

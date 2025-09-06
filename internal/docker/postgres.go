@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	dockertypes "github.com/docker/docker/api/types"
+
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/go-connections/nat"
@@ -185,7 +185,7 @@ func (m *PostgreSQLManager) GetPostgreSQLContainerStatus(ctx context.Context, co
 }
 
 // ListPostgreSQLContainers lists all PostgreSQL containers managed by this service.
-func (m *PostgreSQLManager) ListPostgreSQLContainers(ctx context.Context) ([]dockertypes.Container, error) {
+func (m *PostgreSQLManager) ListPostgreSQLContainers(ctx context.Context) ([]container.Summary, error) {
 	filterArgs := filters.NewArgs()
 	filterArgs.Add("label", "dev-postgres-mcp.managed=true")
 

@@ -156,6 +156,7 @@ func (m *Manager) ListInstances(ctx context.Context) ([]*types.PostgreSQLInstanc
 			if containerName[0] == '/' {
 				containerName = containerName[1:] // Remove leading slash
 			}
+			_ = containerName // containerName is extracted but not used in current logic
 			if containerStatus, err := m.docker.PostgreSQL().GetPostgreSQLContainerStatus(ctx, container.ID); err == nil {
 				status = containerStatus
 			}

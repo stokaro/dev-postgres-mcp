@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	dockertypes "github.com/docker/docker/api/types"
+
 	"github.com/docker/docker/api/types/container"
 	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
@@ -49,7 +49,7 @@ func (c *Client) PullImage(ctx context.Context, imageName string) error {
 	slog.Info("Checking if image exists locally", "image", imageName)
 
 	// Check if image exists locally
-	_, _, err := c.cli.ImageInspectWithRaw(ctx, imageName)
+	_, err := c.cli.ImageInspect(ctx, imageName)
 	if err == nil {
 		slog.Info("Image already exists locally", "image", imageName)
 		return nil
@@ -141,17 +141,17 @@ func (c *Client) RemoveContainer(ctx context.Context, containerID string) error 
 }
 
 // InspectContainer returns detailed information about a container.
-func (c *Client) InspectContainer(ctx context.Context, containerID string) (dockertypes.ContainerJSON, error) {
+func (c *Client) InspectContainer(ctx context.Context, containerID string) (container.InspectResponse, error) {
 	inspect, err := c.cli.ContainerInspect(ctx, containerID)
 	if err != nil {
-		return dockertypes.ContainerJSON{}, fmt.Errorf("failed to inspect container %s: %w", containerID, err)
+		return container.InspectResponse{}, fmt.Errorf("failed to inspect container %s: %w", containerID, err)
 	}
 
 	return inspect, nil
 }
 
 // ListContainers lists containers with optional filters.
-func (c *Client) ListContainers(ctx context.Context, options container.ListOptions) ([]dockertypes.Container, error) {
+func (c *Client) ListContainers(ctx context.Context, options container.ListOptions) ([]container.Summary, error) {
 	containers, err := c.cli.ContainerList(ctx, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)

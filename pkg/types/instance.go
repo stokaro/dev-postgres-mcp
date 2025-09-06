@@ -4,8 +4,8 @@ package types
 import (
 	"time"
 
-	dockertypes "github.com/docker/docker/api/types"
-	containertypes "github.com/docker/docker/api/types/container"
+
+"github.com/docker/docker/api/types/container"
 )
 
 // PostgreSQLInstance represents a PostgreSQL database instance.
@@ -58,7 +58,7 @@ type CreateInstanceOptions struct {
 }
 
 // Container is an alias for Docker container type to avoid importing Docker types everywhere.
-type Container = dockertypes.Container
+type Container = container.Summary
 
 // ContainerListOptions is an alias for Docker container list options.
-type ContainerListOptions = containertypes.ListOptions
+type ContainerListOptions = container.ListOptions

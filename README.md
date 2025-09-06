@@ -145,8 +145,6 @@ Performs a health check on a database instance.
 **Returns:**
 - Health status and diagnostic information
 
-
-
 ## Configuration
 
 ### Environment Variables

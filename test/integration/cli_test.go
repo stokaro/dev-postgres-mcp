@@ -20,22 +20,32 @@ func getBinaryName() string {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	return name
+	// Add path prefix for current directory
+	return "./" + name
 }
 
 // buildTestBinary builds the CLI binary for testing
 func buildTestBinary(c *qt.C) string {
-	binaryName := getBinaryName()
-	buildCmd := exec.Command("go", "build", "-o", binaryName, "../../cmd/dev-postgres-mcp")
+	// Get the base name without path for building
+	baseName := "dev-postgres-mcp-test"
+	if runtime.GOOS == "windows" {
+		baseName += ".exe"
+	}
+
+	buildCmd := exec.Command("go", "build", "-o", baseName, "../../cmd/dev-postgres-mcp")
 	if err := buildCmd.Run(); err != nil {
 		c.Skip("Failed to build CLI binary:", err)
 	}
-	return binaryName
+
+	// Return the path-prefixed name for execution
+	return getBinaryName()
 }
 
 // cleanupTestBinary removes the test binary in a cross-platform way
 func cleanupTestBinary(binaryName string) {
-	os.Remove(binaryName) // Cross-platform file removal
+	// Remove the path prefix for cleanup
+	baseName := strings.TrimPrefix(binaryName, "./")
+	os.Remove(baseName) // Cross-platform file removal
 }
 
 func TestCLICommands(t *testing.T) {

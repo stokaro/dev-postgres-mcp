@@ -1,4 +1,4 @@
-// Package mcp provides Model Context Protocol integration for PostgreSQL instance management.
+// Package mcp provides Model Context Protocol integration for database instance management.
 package mcp
 
 import (
@@ -9,17 +9,17 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/stokaro/dev-postgres-mcp/internal/postgres"
+	"github.com/stokaro/dev-postgres-mcp/internal/database"
 	"github.com/stokaro/dev-postgres-mcp/pkg/types"
 )
 
-// ToolHandler handles MCP tool calls for PostgreSQL instance management.
+// ToolHandler handles MCP tool calls for database instance management.
 type ToolHandler struct {
-	manager *postgres.Manager
+	manager *database.UnifiedManager
 }
 
-// NewToolHandler creates a new MCP tool handler.
-func NewToolHandler(manager *postgres.Manager) *ToolHandler {
+// NewToolHandler creates a new MCP tool handler with unified database support.
+func NewToolHandler(manager *database.UnifiedManager) *ToolHandler {
 	return &ToolHandler{
 		manager: manager,
 	}
@@ -28,27 +28,29 @@ func NewToolHandler(manager *postgres.Manager) *ToolHandler {
 // GetTools returns the list of available MCP tools.
 func (h *ToolHandler) GetTools() []mcp.Tool {
 	return []mcp.Tool{
-		mcp.NewTool("create_postgres_instance",
-			mcp.WithDescription("Create a new ephemeral PostgreSQL instance in a Docker container"),
-			mcp.WithString("version", mcp.Description("PostgreSQL version to use (default: 17)")),
-			mcp.WithString("database", mcp.Description("Database name to create (default: postgres)")),
-			mcp.WithString("username", mcp.Description("PostgreSQL username (default: postgres)")),
-			mcp.WithString("password", mcp.Description("PostgreSQL password (auto-generated if not provided)")),
+		mcp.NewTool("create_database_instance",
+			mcp.WithDescription("Create a new ephemeral database instance in a Docker container"),
+			mcp.WithString("type", mcp.Description("Database type: postgresql, mysql, or mariadb (default: postgresql)")),
+			mcp.WithString("version", mcp.Description("Database version to use (defaults vary by type)")),
+			mcp.WithString("database", mcp.Description("Database name to create (defaults vary by type)")),
+			mcp.WithString("username", mcp.Description("Database username (defaults vary by type)")),
+			mcp.WithString("password", mcp.Description("Database password (auto-generated if not provided)")),
 		),
-		mcp.NewTool("list_postgres_instances",
-			mcp.WithDescription("List all running PostgreSQL instances"),
+		mcp.NewTool("list_database_instances",
+			mcp.WithDescription("List all running database instances"),
+			mcp.WithString("type", mcp.Description("Filter by database type: postgresql, mysql, mariadb (optional)")),
 		),
-		mcp.NewTool("get_postgres_instance",
-			mcp.WithDescription("Get details of a specific PostgreSQL instance"),
-			mcp.WithString("instance_id", mcp.Description("The unique identifier of the PostgreSQL instance"), mcp.Required()),
+		mcp.NewTool("get_database_instance",
+			mcp.WithDescription("Get details of a specific database instance"),
+			mcp.WithString("instance_id", mcp.Description("The unique identifier of the database instance"), mcp.Required()),
 		),
-		mcp.NewTool("drop_postgres_instance",
-			mcp.WithDescription("Remove a PostgreSQL instance and all its data"),
-			mcp.WithString("instance_id", mcp.Description("The unique identifier of the PostgreSQL instance to remove"), mcp.Required()),
+		mcp.NewTool("drop_database_instance",
+			mcp.WithDescription("Remove a database instance and all its data"),
+			mcp.WithString("instance_id", mcp.Description("The unique identifier of the database instance to remove"), mcp.Required()),
 		),
-		mcp.NewTool("health_check_postgres",
-			mcp.WithDescription("Check the health status of a PostgreSQL instance"),
-			mcp.WithString("instance_id", mcp.Description("The unique identifier of the PostgreSQL instance to check"), mcp.Required()),
+		mcp.NewTool("health_check_database",
+			mcp.WithDescription("Check the health status of a database instance"),
+			mcp.WithString("instance_id", mcp.Description("The unique identifier of the database instance to check"), mcp.Required()),
 		),
 	}
 }
@@ -66,31 +68,34 @@ func (h *ToolHandler) HandleTool(ctx context.Context, request mcp.CallToolReques
 	}
 
 	switch name {
-	case "create_postgres_instance":
-		return h.handleCreateInstance(ctx, args)
-	case "list_postgres_instances":
-		return h.handleListInstances(ctx, args)
-	case "get_postgres_instance":
-		return h.handleGetInstance(ctx, args)
-	case "drop_postgres_instance":
-		return h.handleDropInstance(ctx, args)
-	case "health_check_postgres":
-		return h.handleHealthCheck(ctx, args)
+	case "create_database_instance":
+		return h.handleCreateDatabaseInstance(ctx, args)
+	case "list_database_instances":
+		return h.handleListDatabaseInstances(ctx, args)
+	case "get_database_instance":
+		return h.handleGetDatabaseInstance(ctx, args)
+	case "drop_database_instance":
+		return h.handleDropDatabaseInstance(ctx, args)
+	case "health_check_database":
+		return h.handleHealthCheckDatabase(ctx, args)
 	default:
 		return mcp.NewToolResultError(fmt.Sprintf("Unknown tool: %s", name)), nil
 	}
 }
 
-// handleCreateInstance handles the create_postgres_instance tool call.
-func (h *ToolHandler) handleCreateInstance(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
+// handleCreateDatabaseInstance handles the create_database_instance tool call.
+func (h *ToolHandler) handleCreateDatabaseInstance(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
 	opts := types.CreateInstanceOptions{}
 
 	// Parse arguments
+	if dbType, ok := arguments["type"].(string); ok {
+		opts.Type = types.DatabaseType(dbType)
+	}
 	if version, ok := arguments["version"].(string); ok {
 		opts.Version = version
 	}
-	if database, ok := arguments["database"].(string); ok {
-		opts.Database = database
+	if databaseName, ok := arguments["database"].(string); ok {
+		opts.Database = databaseName
 	}
 	if username, ok := arguments["username"].(string); ok {
 		opts.Username = username
@@ -102,12 +107,13 @@ func (h *ToolHandler) handleCreateInstance(ctx context.Context, arguments map[st
 	// Create instance
 	instance, err := h.manager.CreateInstance(ctx, opts)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to create PostgreSQL instance: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to create database instance: %v", err)), nil
 	}
 
 	// Format response
 	response := map[string]any{
 		"instance_id":  instance.ID,
+		"type":         instance.Type,
 		"container_id": instance.ContainerID,
 		"port":         instance.Port,
 		"database":     instance.Database,
@@ -124,18 +130,31 @@ func (h *ToolHandler) handleCreateInstance(ctx context.Context, arguments map[st
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format response: %v", err)), nil
 	}
 
-	return mcp.NewToolResultText(fmt.Sprintf("PostgreSQL instance created successfully:\n\n```json\n%s\n```", string(responseJSON))), nil
+	return mcp.NewToolResultText(fmt.Sprintf("Database instance created successfully:\n\n```json\n%s\n```", string(responseJSON))), nil
 }
 
-// handleListInstances handles the list_postgres_instances tool call.
-func (h *ToolHandler) handleListInstances(ctx context.Context, _ map[string]any) (*mcp.CallToolResult, error) {
-	instances, err := h.manager.ListInstances(ctx)
+// handleListDatabaseInstances handles the list_database_instances tool call.
+func (h *ToolHandler) handleListDatabaseInstances(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
+	var instances []*types.DatabaseInstance
+	var err error
+
+	// Check if filtering by type
+	if dbTypeStr, ok := arguments["type"].(string); ok && dbTypeStr != "" {
+		dbType := types.DatabaseType(dbTypeStr)
+		if !dbType.IsValid() {
+			return mcp.NewToolResultError(fmt.Sprintf("Invalid database type: %s", dbTypeStr)), nil
+		}
+		instances, err = h.manager.ListInstancesByType(ctx, dbType)
+	} else {
+		instances, err = h.manager.ListInstances(ctx)
+	}
+
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list PostgreSQL instances: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to list database instances: %v", err)), nil
 	}
 
 	if len(instances) == 0 {
-		return mcp.NewToolResultText("No PostgreSQL instances are currently running."), nil
+		return mcp.NewToolResultText("No database instances are currently running."), nil
 	}
 
 	// Format response
@@ -149,19 +168,19 @@ func (h *ToolHandler) handleListInstances(ctx context.Context, _ map[string]any)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format response: %v", err)), nil
 	}
 
-	return mcp.NewToolResultText(fmt.Sprintf("Found %d PostgreSQL instance(s):\n\n```json\n%s\n```", len(instances), string(responseJSON))), nil
+	return mcp.NewToolResultText(fmt.Sprintf("Database instances:\n\n```json\n%s\n```", string(responseJSON))), nil
 }
 
-// handleGetInstance handles the get_postgres_instance tool call.
-func (h *ToolHandler) handleGetInstance(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
+// handleGetDatabaseInstance handles the get_database_instance tool call.
+func (h *ToolHandler) handleGetDatabaseInstance(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
 	instanceID, ok := arguments["instance_id"].(string)
 	if !ok || instanceID == "" {
-		return mcp.NewToolResultError("instance_id is required and must be a string"), nil
+		return mcp.NewToolResultError("instance_id parameter is required"), nil
 	}
 
 	instance, err := h.manager.GetInstance(ctx, instanceID)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to get PostgreSQL instance: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get database instance: %v", err)), nil
 	}
 
 	responseJSON, err := json.MarshalIndent(instance, "", "  ")
@@ -169,29 +188,47 @@ func (h *ToolHandler) handleGetInstance(ctx context.Context, arguments map[strin
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format response: %v", err)), nil
 	}
 
-	return mcp.NewToolResultText(fmt.Sprintf("PostgreSQL instance details:\n\n```json\n%s\n```", string(responseJSON))), nil
+	return mcp.NewToolResultText(fmt.Sprintf("Database instance details:\n\n```json\n%s\n```", string(responseJSON))), nil
 }
 
-// handleDropInstance handles the drop_postgres_instance tool call.
-func (h *ToolHandler) handleDropInstance(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
+// handleDropDatabaseInstance handles the drop_database_instance tool call.
+func (h *ToolHandler) handleDropDatabaseInstance(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
 	instanceID, ok := arguments["instance_id"].(string)
 	if !ok || instanceID == "" {
-		return mcp.NewToolResultError("instance_id is required and must be a string"), nil
+		return mcp.NewToolResultError("instance_id parameter is required"), nil
 	}
 
-	err := h.manager.DropInstance(ctx, instanceID)
+	// Get instance details before dropping for response
+	instance, err := h.manager.GetInstance(ctx, instanceID)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to drop PostgreSQL instance: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to find database instance: %v", err)), nil
 	}
 
-	return mcp.NewToolResultText(fmt.Sprintf("PostgreSQL instance %s has been successfully dropped and all data has been removed.", instanceID)), nil
+	err = h.manager.DropInstance(ctx, instanceID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to drop database instance: %v", err)), nil
+	}
+
+	response := map[string]any{
+		"message":     "Database instance dropped successfully",
+		"instance_id": instance.ID,
+		"type":        instance.Type,
+		"port":        instance.Port,
+	}
+
+	responseJSON, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to format response: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Database instance dropped:\n\n```json\n%s\n```", string(responseJSON))), nil
 }
 
-// handleHealthCheck handles the health_check_postgres tool call.
-func (h *ToolHandler) handleHealthCheck(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
+// handleHealthCheckDatabase handles the health_check_database tool call.
+func (h *ToolHandler) handleHealthCheckDatabase(ctx context.Context, arguments map[string]any) (*mcp.CallToolResult, error) {
 	instanceID, ok := arguments["instance_id"].(string)
 	if !ok || instanceID == "" {
-		return mcp.NewToolResultError("instance_id is required and must be a string"), nil
+		return mcp.NewToolResultError("instance_id parameter is required"), nil
 	}
 
 	health, err := h.manager.HealthCheck(ctx, instanceID)

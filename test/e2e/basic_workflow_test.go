@@ -3,7 +3,9 @@ package e2e_test
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +14,40 @@ import (
 
 	"github.com/stokaro/dev-postgres-mcp/internal/docker"
 )
+
+// getBinaryName returns the appropriate binary name for the current OS
+func getBinaryName() string {
+	name := "dev-postgres-mcp-e2e"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	// Add path prefix for current directory
+	return "../../" + name
+}
+
+// buildTestBinary builds the CLI binary for testing
+func buildTestBinary(c *qt.C) string {
+	// Get the base name without path for building
+	baseName := "dev-postgres-mcp-e2e"
+	if runtime.GOOS == "windows" {
+		baseName += ".exe"
+	}
+
+	buildCmd := exec.Command("go", "build", "-o", "../../"+baseName, "../../cmd/dev-postgres-mcp")
+	if err := buildCmd.Run(); err != nil {
+		c.Skip("Failed to build CLI binary:", err)
+	}
+
+	// Return the path-prefixed name for execution
+	return getBinaryName()
+}
+
+// cleanupTestBinary removes the test binary in a cross-platform way
+func cleanupTestBinary(binaryName string) {
+	// Remove the path prefix for cleanup
+	baseName := strings.TrimPrefix(binaryName, "../../")
+	os.Remove("../../" + baseName) // Cross-platform file removal
+}
 
 // TestBasicWorkflow tests the complete end-to-end workflow of the application
 func TestBasicWorkflow(t *testing.T) {
@@ -30,14 +66,12 @@ func TestBasicWorkflow(t *testing.T) {
 	}
 
 	// Build the CLI binary first
-	buildCmd := exec.Command("go", "build", "-o", "../../dev-postgres-mcp-e2e.exe", "../../cmd/dev-postgres-mcp")
-	if err := buildCmd.Run(); err != nil {
-		c.Skip("Failed to build CLI binary:", err)
-	}
+	binaryName := buildTestBinary(c)
+	defer cleanupTestBinary(binaryName)
 
 	c.Run("complete_workflow", func(c *qt.C) {
 		// Step 1: Verify no instances are running initially
-		cmd := exec.Command("../../dev-postgres-mcp-e2e.exe", "postgres", "list", "--format", "json")
+		cmd := exec.Command(binaryName, "database", "list", "--format", "json")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 
@@ -49,47 +83,47 @@ func TestBasicWorkflow(t *testing.T) {
 		c.Assert(len(instances), qt.Equals, 0)
 
 		// Step 2: Test version command
-		cmd = exec.Command("../../dev-postgres-mcp-e2e.exe", "version")
+		cmd = exec.Command(binaryName, "version")
 		output, err = cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		c.Assert(string(output), qt.Contains, "dev-postgres-mcp")
 		c.Assert(string(output), qt.Contains, "Go version:")
 
 		// Step 3: Test help command
-		cmd = exec.Command("../../dev-postgres-mcp-e2e.exe", "--help")
+		cmd = exec.Command(binaryName, "--help")
 		output, err = cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
 		c.Assert(outputStr, qt.Contains, "dev-postgres-mcp")
 		c.Assert(outputStr, qt.Contains, "mcp")
-		c.Assert(outputStr, qt.Contains, "postgres")
+		c.Assert(outputStr, qt.Contains, "database")
 
 		// Step 4: Test MCP serve help
-		cmd = exec.Command("../../dev-postgres-mcp-e2e.exe", "mcp", "serve", "--help")
+		cmd = exec.Command(binaryName, "mcp", "serve", "--help")
 		output, err = cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
-		c.Assert(string(output), qt.Contains, "Start the MCP server")
+		c.Assert(string(output), qt.Contains, "Start the Model Context Protocol server")
 
-		// Step 5: Test postgres commands help
-		cmd = exec.Command("../../dev-postgres-mcp-e2e.exe", "postgres", "--help")
+		// Step 5: Test database commands help
+		cmd = exec.Command(binaryName, "database", "--help")
 		output, err = cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
-		c.Assert(string(output), qt.Contains, "managing PostgreSQL instances")
+		c.Assert(string(output), qt.Contains, "Commands for managing database instances")
 
 		// Step 6: Test invalid command
-		cmd = exec.Command("../../dev-postgres-mcp-e2e.exe", "invalid-command")
+		cmd = exec.Command(binaryName, "invalid-command")
 		output, err = cmd.CombinedOutput()
 		c.Assert(err, qt.Not(qt.IsNil))
 		c.Assert(string(output), qt.Contains, "unknown command")
 
 		// Step 7: Test invalid flag
-		cmd = exec.Command("../../dev-postgres-mcp-e2e.exe", "postgres", "list", "--invalid-flag")
+		cmd = exec.Command(binaryName, "database", "list", "--invalid-flag")
 		output, err = cmd.CombinedOutput()
 		c.Assert(err, qt.Not(qt.IsNil))
 		c.Assert(string(output), qt.Contains, "unknown flag")
 
 		// Step 8: Test drop non-existent instance
-		cmd = exec.Command("../../dev-postgres-mcp-e2e.exe", "postgres", "drop", "nonexistent-id")
+		cmd = exec.Command(binaryName, "database", "drop", "nonexistent-id")
 		output, err = cmd.CombinedOutput()
 		c.Assert(err, qt.Not(qt.IsNil))
 		c.Assert(string(output), qt.Contains, "not found")
@@ -100,7 +134,7 @@ func TestBasicWorkflow(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "../../dev-postgres-mcp-e2e.exe", "mcp", "serve")
+		cmd := exec.CommandContext(ctx, binaryName, "mcp", "serve")
 		err := cmd.Start()
 		c.Assert(err, qt.IsNil)
 
@@ -119,13 +153,11 @@ func TestCLIErrorHandling(t *testing.T) {
 	c := qt.New(t)
 
 	// Build the CLI binary first
-	buildCmd := exec.Command("go", "build", "-o", "../../dev-postgres-mcp-e2e.exe", "../../cmd/dev-postgres-mcp")
-	if err := buildCmd.Run(); err != nil {
-		c.Skip("Failed to build CLI binary:", err)
-	}
+	binaryName := buildTestBinary(c)
+	defer cleanupTestBinary(binaryName)
 
 	c.Run("missing_arguments", func(c *qt.C) {
-		cmd := exec.Command("../../dev-postgres-mcp-e2e.exe", "postgres", "drop")
+		cmd := exec.Command(binaryName, "database", "drop")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.Not(qt.IsNil))
 		outputStr := string(output)
@@ -133,7 +165,7 @@ func TestCLIErrorHandling(t *testing.T) {
 	})
 
 	c.Run("too_many_arguments", func(c *qt.C) {
-		cmd := exec.Command("../../dev-postgres-mcp-e2e.exe", "postgres", "drop", "id1", "id2")
+		cmd := exec.Command(binaryName, "database", "drop", "id1", "id2")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.Not(qt.IsNil))
 		outputStr := string(output)
@@ -141,7 +173,7 @@ func TestCLIErrorHandling(t *testing.T) {
 	})
 
 	c.Run("invalid_format", func(c *qt.C) {
-		cmd := exec.Command("../../dev-postgres-mcp-e2e.exe", "postgres", "list", "--format", "invalid")
+		cmd := exec.Command(binaryName, "database", "list", "--format", "invalid")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.Not(qt.IsNil))
 		outputStr := string(output)
@@ -166,13 +198,11 @@ func TestOutputFormats(t *testing.T) {
 	}
 
 	// Build the CLI binary first
-	buildCmd := exec.Command("go", "build", "-o", "../../dev-postgres-mcp-e2e.exe", "../../cmd/dev-postgres-mcp")
-	if err := buildCmd.Run(); err != nil {
-		c.Skip("Failed to build CLI binary:", err)
-	}
+	binaryName := buildTestBinary(c)
+	defer cleanupTestBinary(binaryName)
 
 	c.Run("table_format", func(c *qt.C) {
-		cmd := exec.Command("../../dev-postgres-mcp-e2e.exe", "postgres", "list", "--format", "table")
+		cmd := exec.Command(binaryName, "database", "list", "--format", "table")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
@@ -181,7 +211,7 @@ func TestOutputFormats(t *testing.T) {
 	})
 
 	c.Run("json_format", func(c *qt.C) {
-		cmd := exec.Command("../../dev-postgres-mcp-e2e.exe", "postgres", "list", "--format", "json")
+		cmd := exec.Command(binaryName, "database", "list", "--format", "json")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 

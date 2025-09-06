@@ -224,7 +224,6 @@ func TestDockerManagerCreation(t *testing.T) {
 	defer manager.Close()
 
 	c.Assert(manager, qt.IsNotNil)
-	c.Assert(manager.PostgreSQL(), qt.IsNotNil)
 	c.Assert(manager.GetClient(), qt.IsNotNil)
 }
 

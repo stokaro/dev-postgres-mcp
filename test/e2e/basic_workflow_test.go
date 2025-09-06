@@ -108,7 +108,7 @@ func TestBasicWorkflow(t *testing.T) {
 		cmd = exec.Command(binaryName, "database", "--help")
 		output, err = cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
-		c.Assert(string(output), qt.Contains, "Database instance management commands")
+		c.Assert(string(output), qt.Contains, "Commands for managing database instances")
 
 		// Step 6: Test invalid command
 		cmd = exec.Command(binaryName, "invalid-command")

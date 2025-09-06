@@ -47,18 +47,18 @@ func TestCLICommands(t *testing.T) {
 		outputStr := string(output)
 		c.Assert(outputStr, qt.Contains, "dev-postgres-mcp")
 		c.Assert(outputStr, qt.Contains, "mcp")
-		c.Assert(outputStr, qt.Contains, "postgres")
+		c.Assert(outputStr, qt.Contains, "database")
 	})
 
-	c.Run("postgres_list_empty", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "list", "--start-port", "21000", "--end-port", "21010")
+	c.Run("database_list_empty", func(c *qt.C) {
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--start-port", "21000", "--end-port", "21010")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
-		c.Assert(string(output), qt.Contains, "No PostgreSQL instances are currently running")
+		c.Assert(string(output), qt.Contains, "No database instances are currently running")
 	})
 
-	c.Run("postgres_list_json_format", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "list", "--format", "json", "--start-port", "21000", "--end-port", "21010")
+	c.Run("database_list_json_format", func(c *qt.C) {
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--format", "json", "--start-port", "21000", "--end-port", "21010")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
@@ -66,8 +66,8 @@ func TestCLICommands(t *testing.T) {
 		c.Assert(outputStr, qt.Contains, "instances")
 	})
 
-	c.Run("postgres_drop_nonexistent", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "drop", "nonexistent-id", "--force", "--start-port", "21000", "--end-port", "21010")
+	c.Run("database_drop_nonexistent", func(c *qt.C) {
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "drop", "nonexistent-id", "--force", "--start-port", "21000", "--end-port", "21010")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		c.Assert(string(output), qt.Contains, "not found")
@@ -110,7 +110,7 @@ func TestCLIFlags(t *testing.T) {
 	}
 
 	c.Run("invalid_format_flag", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "list", "--format", "invalid", "--start-port", "21100", "--end-port", "21110")
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--format", "invalid", "--start-port", "21100", "--end-port", "21110")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		c.Assert(string(output), qt.Contains, "unsupported format")
@@ -118,7 +118,7 @@ func TestCLIFlags(t *testing.T) {
 
 	c.Run("invalid_port_range", func(c *qt.C) {
 		// Test with start port higher than end port
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "list", "--start-port", "21110", "--end-port", "21100")
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--start-port", "21110", "--end-port", "21100")
 		output, err := cmd.CombinedOutput()
 		// This should either fail or handle gracefully
 		if err == nil {
@@ -127,8 +127,8 @@ func TestCLIFlags(t *testing.T) {
 		}
 	})
 
-	c.Run("postgres_drop_missing_args", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "drop")
+	c.Run("database_drop_missing_args", func(c *qt.C) {
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "drop")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		outputStr := string(output)
@@ -136,8 +136,8 @@ func TestCLIFlags(t *testing.T) {
 		c.Assert(outputStr, qt.Contains, "accepts 1 arg")
 	})
 
-	c.Run("postgres_drop_too_many_args", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "drop", "id1", "id2")
+	c.Run("database_drop_too_many_args", func(c *qt.C) {
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "drop", "id1", "id2")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		// Should indicate too many arguments
@@ -167,7 +167,7 @@ func TestCLIErrorHandling(t *testing.T) {
 	})
 
 	c.Run("unknown_subcommand", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "unknown")
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "unknown")
 		output, err := cmd.CombinedOutput()
 		// Cobra shows help for unknown subcommands instead of erroring
 		c.Assert(err, qt.IsNil)
@@ -176,7 +176,7 @@ func TestCLIErrorHandling(t *testing.T) {
 	})
 
 	c.Run("invalid_flag", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "list", "--invalid-flag")
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--invalid-flag")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		outputStr := string(output)
@@ -186,7 +186,7 @@ func TestCLIErrorHandling(t *testing.T) {
 	// Test Docker unavailable scenario by using an invalid port range that would fail
 	c.Run("docker_unavailable", func(c *qt.C) {
 		// Use a port range that's likely to cause issues or be unavailable
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "list", "--start-port", "1", "--end-port", "2")
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--start-port", "1", "--end-port", "2")
 		output, err := cmd.CombinedOutput()
 		// This might fail due to permission issues with low ports
 		if err != nil {
@@ -214,7 +214,7 @@ func TestCLITimeout(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "./dev-postgres-mcp-test", "postgres", "list", "--start-port", "22000", "--end-port", "22010")
+		cmd := exec.CommandContext(ctx, "./dev-postgres-mcp-test", "database", "list", "--start-port", "22000", "--end-port", "22010")
 		output, err := cmd.CombinedOutput()
 
 		// Command should complete within timeout
@@ -253,24 +253,24 @@ func TestCLIOutputFormats(t *testing.T) {
 	}
 
 	c.Run("table_format_structure", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "list", "--format", "table", "--start-port", "22100", "--end-port", "22110")
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--format", "table", "--start-port", "22100", "--end-port", "22110")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
 
-		if strings.Contains(outputStr, "No PostgreSQL instances") {
+		if strings.Contains(outputStr, "No database instances") {
 			// Empty case is fine
 			return
 		}
 
 		// Should have table headers if there are instances
-		c.Assert(outputStr, qt.Contains, "INSTANCE ID")
-		c.Assert(outputStr, qt.Contains, "CONTAINER ID")
+		c.Assert(outputStr, qt.Contains, "ID")
+		c.Assert(outputStr, qt.Contains, "TYPE")
 		c.Assert(outputStr, qt.Contains, "PORT")
 	})
 
 	c.Run("json_format_structure", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "postgres", "list", "--format", "json", "--start-port", "22100", "--end-port", "22110")
+		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--format", "json", "--start-port", "22100", "--end-port", "22110")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -129,7 +128,7 @@ func TestCLIFlags(t *testing.T) {
 	defer cleanupTestBinary(binaryName)
 
 	c.Run("invalid_format_flag", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--format", "invalid", "--start-port", "21100", "--end-port", "21110")
+		cmd := exec.Command(binaryName, "database", "list", "--format", "invalid", "--start-port", "21100", "--end-port", "21110")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		c.Assert(string(output), qt.Contains, "unsupported format")
@@ -137,7 +136,7 @@ func TestCLIFlags(t *testing.T) {
 
 	c.Run("invalid_port_range", func(c *qt.C) {
 		// Test with start port higher than end port
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--start-port", "21110", "--end-port", "21100")
+		cmd := exec.Command(binaryName, "database", "list", "--start-port", "21110", "--end-port", "21100")
 		output, err := cmd.CombinedOutput()
 		// This should either fail or handle gracefully
 		if err == nil {
@@ -147,7 +146,7 @@ func TestCLIFlags(t *testing.T) {
 	})
 
 	c.Run("database_drop_missing_args", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "drop")
+		cmd := exec.Command(binaryName, "database", "drop")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		outputStr := string(output)
@@ -156,7 +155,7 @@ func TestCLIFlags(t *testing.T) {
 	})
 
 	c.Run("database_drop_too_many_args", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "drop", "id1", "id2")
+		cmd := exec.Command(binaryName, "database", "drop", "id1", "id2")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		// Should indicate too many arguments
@@ -172,13 +171,11 @@ func TestCLIErrorHandling(t *testing.T) {
 	c := qt.New(t)
 
 	// Build the CLI binary first
-	buildCmd := exec.Command("go", "build", "-o", "dev-postgres-mcp-test", "../../cmd/dev-postgres-mcp")
-	if err := buildCmd.Run(); err != nil {
-		c.Skip("Failed to build CLI binary:", err)
-	}
+	binaryName := buildTestBinary(c)
+	defer cleanupTestBinary(binaryName)
 
 	c.Run("unknown_command", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "unknown")
+		cmd := exec.Command(binaryName, "unknown")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		outputStr := string(output)
@@ -186,7 +183,7 @@ func TestCLIErrorHandling(t *testing.T) {
 	})
 
 	c.Run("unknown_subcommand", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "unknown")
+		cmd := exec.Command(binaryName, "database", "unknown")
 		output, err := cmd.CombinedOutput()
 		// Cobra shows help for unknown subcommands instead of erroring
 		c.Assert(err, qt.IsNil)
@@ -195,7 +192,7 @@ func TestCLIErrorHandling(t *testing.T) {
 	})
 
 	c.Run("invalid_flag", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--invalid-flag")
+		cmd := exec.Command(binaryName, "database", "list", "--invalid-flag")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNotNil)
 		outputStr := string(output)
@@ -205,7 +202,7 @@ func TestCLIErrorHandling(t *testing.T) {
 	// Test Docker unavailable scenario by using an invalid port range that would fail
 	c.Run("docker_unavailable", func(c *qt.C) {
 		// Use a port range that's likely to cause issues or be unavailable
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--start-port", "1", "--end-port", "2")
+		cmd := exec.Command(binaryName, "database", "list", "--start-port", "1", "--end-port", "2")
 		output, err := cmd.CombinedOutput()
 		// This might fail due to permission issues with low ports
 		if err != nil {
@@ -223,17 +220,15 @@ func TestCLITimeout(t *testing.T) {
 	c := qt.New(t)
 
 	// Build the CLI binary first
-	buildCmd := exec.Command("go", "build", "-o", "dev-postgres-mcp-test", "../../cmd/dev-postgres-mcp")
-	if err := buildCmd.Run(); err != nil {
-		c.Skip("Failed to build CLI binary:", err)
-	}
+	binaryName := buildTestBinary(c)
+	defer cleanupTestBinary(binaryName)
 
 	c.Run("command_timeout", func(c *qt.C) {
 		// Test that commands don't hang indefinitely
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "./dev-postgres-mcp-test", "database", "list", "--start-port", "22000", "--end-port", "22010")
+		cmd := exec.CommandContext(ctx, binaryName, "database", "list", "--start-port", "22000", "--end-port", "22010")
 		output, err := cmd.CombinedOutput()
 
 		// Command should complete within timeout
@@ -245,9 +240,6 @@ func TestCLITimeout(t *testing.T) {
 			c.Assert(outputStr, qt.Not(qt.Equals), "")
 		}
 	})
-
-	// Clean up test binary
-	exec.Command("rm", "-f", "dev-postgres-mcp-test").Run()
 }
 
 func TestCLIOutputFormats(t *testing.T) {
@@ -266,13 +258,11 @@ func TestCLIOutputFormats(t *testing.T) {
 	}
 
 	// Build the CLI binary first
-	buildCmd := exec.Command("go", "build", "-o", "dev-postgres-mcp-test", "../../cmd/dev-postgres-mcp")
-	if err := buildCmd.Run(); err != nil {
-		c.Skip("Failed to build CLI binary:", err)
-	}
+	binaryName := buildTestBinary(c)
+	defer cleanupTestBinary(binaryName)
 
 	c.Run("table_format_structure", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--format", "table", "--start-port", "22100", "--end-port", "22110")
+		cmd := exec.Command(binaryName, "database", "list", "--format", "table", "--start-port", "22100", "--end-port", "22110")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
@@ -289,7 +279,7 @@ func TestCLIOutputFormats(t *testing.T) {
 	})
 
 	c.Run("json_format_structure", func(c *qt.C) {
-		cmd := exec.Command("./dev-postgres-mcp-test", "database", "list", "--format", "json", "--start-port", "22100", "--end-port", "22110")
+		cmd := exec.Command(binaryName, "database", "list", "--format", "json", "--start-port", "22100", "--end-port", "22110")
 		output, err := cmd.CombinedOutput()
 		c.Assert(err, qt.IsNil)
 		outputStr := string(output)
@@ -300,7 +290,4 @@ func TestCLIOutputFormats(t *testing.T) {
 		c.Assert(outputStr, qt.Contains, `[`)
 		c.Assert(outputStr, qt.Contains, `]`)
 	})
-
-	// Clean up test binary
-	exec.Command("rm", "-f", "dev-postgres-mcp-test").Run()
 }

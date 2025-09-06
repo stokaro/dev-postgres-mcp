@@ -342,10 +342,21 @@ func runDatabaseList(format string, startPort, endPort int, dbType string) error
 			return nil
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tTYPE\tPORT\tDATABASE\tSTATUS\tCREATED")
+		fmt.Fprintln(w, "ID\tCONTAINER ID\tTYPE\tPORT\tDATABASE\tSTATUS\tCREATED")
 		for _, instance := range instances {
-			fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\n",
-				instance.ID,
+			// Truncate IDs for display (first 12 characters)
+			instanceID := instance.ID
+			if len(instanceID) > 12 {
+				instanceID = instanceID[:12]
+			}
+			containerID := instance.ContainerID
+			if len(containerID) > 12 {
+				containerID = containerID[:12]
+			}
+
+			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
+				instanceID,
+				containerID,
 				instance.Type,
 				instance.Port,
 				instance.Database,

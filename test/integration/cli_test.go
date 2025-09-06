@@ -284,6 +284,7 @@ func TestCLIOutputFormats(t *testing.T) {
 
 		// Should have table headers if there are instances
 		c.Assert(outputStr, qt.Contains, "ID")
+		c.Assert(outputStr, qt.Contains, "CONTAINER ID")
 		c.Assert(outputStr, qt.Contains, "TYPE")
 		c.Assert(outputStr, qt.Contains, "PORT")
 	})

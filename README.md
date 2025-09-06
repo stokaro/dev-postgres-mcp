@@ -1,16 +1,19 @@
 # dev-postgres-mcp
 
-A Model Context Protocol (MCP) server that provides tools for creating, managing, and accessing ephemeral PostgreSQL database instances running in Docker containers.
+A Model Context Protocol (MCP) server that provides tools for creating, managing, and accessing ephemeral database instances running in Docker containers. Supports PostgreSQL, MySQL, and MariaDB.
 
 ## Features
 
-- **Ephemeral PostgreSQL Instances**: Create temporary PostgreSQL databases in Docker containers
+- **Multi-Database Support**: Create temporary PostgreSQL, MySQL, and MariaDB instances in Docker containers
 - **Dynamic Port Allocation**: Automatic port assignment to prevent conflicts (range: 15432-25432)
-- **Multiple PostgreSQL Versions**: Support for PostgreSQL 15, 16, and 17 (default: 17)
+- **Multiple Database Versions**: Support for various versions of each database type
+  - PostgreSQL: 15, 16, 17 (default: 17)
+  - MySQL: 5.7, 8.0 (default: 8.0)
+  - MariaDB: 10.6, 11 (default: 11)
 - **Superuser Access**: Auto-generated credentials with full database access
 - **MCP Integration**: Compatible with Augment Code and other MCP clients
 - **CLI Management**: Command-line tools for instance management outside of MCP
-- **Health Monitoring**: Built-in health checks for PostgreSQL instances
+- **Health Monitoring**: Built-in health checks for all database types
 - **Comprehensive Logging**: Structured logging with configurable levels and formats
 
 ## Quick Start
@@ -53,17 +56,25 @@ dev-postgres-mcp mcp serve --log-level debug
 #### CLI Commands
 
 ```bash
-# List all running PostgreSQL instances
-dev-postgres-mcp postgres list
+# List all running database instances
+dev-postgres-mcp database list
+
+# List instances of a specific type
+dev-postgres-mcp database list --type postgresql
+dev-postgres-mcp database list --type mysql
+dev-postgres-mcp database list --type mariadb
 
 # List instances in JSON format
-dev-postgres-mcp postgres list --format json
+dev-postgres-mcp database list --format json
+
+# Get details of a specific instance
+dev-postgres-mcp database get <instance-id>
 
 # Drop a specific instance
-dev-postgres-mcp postgres drop <instance-id>
+dev-postgres-mcp database drop <instance-id>
 
 # Force drop without confirmation
-dev-postgres-mcp postgres drop <instance-id> --force
+dev-postgres-mcp database drop <instance-id> --force
 
 # Show version information
 dev-postgres-mcp version
@@ -76,32 +87,37 @@ dev-postgres-mcp --help
 
 The server provides the following MCP tools:
 
-### `create_postgres_instance`
+#### `create_database_instance`
 
-Creates a new ephemeral PostgreSQL instance.
+Creates a new ephemeral database instance.
 
 **Parameters:**
-- `version` (optional): PostgreSQL version (15, 16, 17) - default: 17
-- `database` (optional): Database name - default: postgres
-- `username` (optional): PostgreSQL username - default: postgres
-- `password` (optional): PostgreSQL password - auto-generated if not provided
+- `type` (optional): Database type - postgresql, mysql, mariadb (default: postgresql)
+- `version` (optional): Database version - defaults vary by type
+- `database` (optional): Database name - defaults vary by type
+- `username` (optional): Database username - defaults vary by type
+- `password` (optional): Database password - auto-generated if not provided
 
 **Returns:**
-- Instance ID
+- Instance ID (without dashes)
+- Database type
 - Connection DSN
 - Port number
 - Database details
 
-### `list_postgres_instances`
+#### `list_database_instances`
 
-Lists all running PostgreSQL instances.
+Lists all running database instances.
+
+**Parameters:**
+- `type` (optional): Filter by database type - postgresql, mysql, mariadb
 
 **Returns:**
-- Array of instance details including ID, port, database, version, status, and creation time
+- Array of instance details including ID, type, port, database, version, status, and creation time
 
-### `get_postgres_instance`
+#### `get_database_instance`
 
-Gets details of a specific PostgreSQL instance.
+Gets details of a specific database instance.
 
 **Parameters:**
 - `instance_id` (required): The instance ID to retrieve
@@ -109,25 +125,27 @@ Gets details of a specific PostgreSQL instance.
 **Returns:**
 - Complete instance details including connection information
 
-### `drop_postgres_instance`
+#### `drop_database_instance`
 
-Removes a PostgreSQL instance and cleans up resources.
+Removes a database instance and cleans up resources.
 
 **Parameters:**
 - `instance_id` (required): The instance ID to remove
 
 **Returns:**
-- Confirmation of successful removal
+- Confirmation of removal
 
-### `health_check_postgres`
+#### `health_check_database`
 
-Performs a health check on a PostgreSQL instance.
+Performs a health check on a database instance.
 
 **Parameters:**
 - `instance_id` (required): The instance ID to check
 
 **Returns:**
 - Health status and diagnostic information
+
+
 
 ## Configuration
 

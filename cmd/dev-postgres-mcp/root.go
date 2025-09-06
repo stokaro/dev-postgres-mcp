@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/stokaro/dev-postgres-mcp/cmd/common/version"
+	"github.com/stokaro/dev-postgres-mcp/internal/database"
 	"github.com/stokaro/dev-postgres-mcp/internal/docker"
 	"github.com/stokaro/dev-postgres-mcp/internal/mcp"
-	"github.com/stokaro/dev-postgres-mcp/internal/postgres"
 	"github.com/stokaro/dev-postgres-mcp/pkg/types"
 )
 
@@ -24,18 +24,19 @@ import (
 func Execute(args ...string) {
 	var rootCmd = &cobra.Command{
 		Use:   "dev-postgres-mcp",
-		Short: "MCP server for managing ephemeral PostgreSQL instances",
+		Short: "MCP server for managing ephemeral database instances",
 		Long: `dev-postgres-mcp is a Model Context Protocol (MCP) server that provides
-tools for creating, managing, and accessing ephemeral PostgreSQL database instances
+tools for creating, managing, and accessing ephemeral database instances
 running in Docker containers.
 
-Each PostgreSQL instance is completely ephemeral and can be created and destroyed
-on demand, making it perfect for development, testing, and experimentation.
+Supports PostgreSQL, MySQL, and MariaDB databases. Each instance is completely 
+ephemeral and can be created and destroyed on demand, making it perfect for 
+development, testing, and experimentation.
 
 FEATURES:
-  • Create ephemeral PostgreSQL instances in Docker containers
+  • Create ephemeral PostgreSQL, MySQL, and MariaDB instances in Docker containers
   • Dynamic port allocation to prevent conflicts
-  • Support for multiple PostgreSQL versions (default: PostgreSQL 17)
+  • Support for multiple database versions
   • Superuser access with auto-generated credentials
   • MCP integration compatible with Augment Code and other MCP clients
   • CLI tools for instance management
@@ -44,11 +45,17 @@ EXAMPLES:
   # Start the MCP server
   dev-postgres-mcp mcp serve
 
-  # List all running PostgreSQL instances
-  dev-postgres-mcp postgres list
+  # List all running database instances
+  dev-postgres-mcp database list
+
+  # List only MySQL instances
+  dev-postgres-mcp database list --type mysql
+
+  # Get details of a specific instance
+  dev-postgres-mcp database get <instance-id>
 
   # Drop a specific instance
-  dev-postgres-mcp postgres drop <instance-id>
+  dev-postgres-mcp database drop <instance-id>
 
 Use "dev-postgres-mcp [command] --help" for detailed information about each command.`,
 		Args: cobra.NoArgs, // Disallow unknown subcommands
@@ -57,11 +64,13 @@ Use "dev-postgres-mcp [command] --help" for detailed information about each comm
 		},
 	}
 
-	rootCmd.SetArgs(args)
+	if len(args) > 0 {
+		rootCmd.SetArgs(args)
+	}
 
 	// Add subcommands
 	rootCmd.AddCommand(newMCPCommand())
-	rootCmd.AddCommand(newPostgresCommand())
+	rootCmd.AddCommand(newDatabaseCommand())
 	rootCmd.AddCommand(version.New())
 
 	err := rootCmd.Execute()
@@ -75,7 +84,7 @@ func newMCPCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "MCP server commands",
-		Long:  "Commands for managing the MCP (Model Context Protocol) server.",
+		Long:  "Commands for running the Model Context Protocol server.",
 	}
 
 	cmd.AddCommand(newMCPServeCommand())
@@ -87,96 +96,176 @@ func newMCPCommand() *cobra.Command {
 func newMCPServeCommand() *cobra.Command {
 	var startPort int
 	var endPort int
-	var logLevel string
 
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Start the MCP server",
-		Long: `Start the MCP server using stdio transport.
+		Long: `Start the Model Context Protocol server for database instance management.
 
-This command starts the MCP server that provides tools for managing PostgreSQL
-instances. The server communicates using the Model Context Protocol over stdio,
-making it compatible with MCP clients like Augment Code.
+This command starts the MCP server that provides tools for managing database
+instances (PostgreSQL, MySQL, MariaDB). The server communicates using the Model 
+Context Protocol over stdio, making it compatible with MCP clients like Augment Code.
 
-The server provides the following tools:
-  • create_postgres_instance - Create a new PostgreSQL instance
-  • list_postgres_instances - List all running instances
-  • get_postgres_instance - Get details of a specific instance
-  • drop_postgres_instance - Remove a PostgreSQL instance
-  • health_check_postgres - Check instance health
+The server provides the following unified tools:
+  • create_database_instance - Create a new database instance
+  • list_database_instances - List all running instances
+  • get_database_instance - Get details of a specific instance
+  • drop_database_instance - Remove a database instance
+  • health_check_database - Check instance health
 
-ENVIRONMENT VARIABLES:
-  DEV_POSTGRES_MCP_LOG_LEVEL    Log level (debug, info, warn, error)
-  DEV_POSTGRES_MCP_LOG_FORMAT   Log format (text, json)`,
+The server will run until interrupted (Ctrl+C) and will automatically clean up
+all managed database instances on shutdown.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return runMCPServe(startPort, endPort, logLevel)
+			return runMCPServe(startPort, endPort)
 		},
 	}
 
-	cmd.Flags().IntVar(&startPort, "start-port", 15432, "Start of port range for PostgreSQL instances")
-	cmd.Flags().IntVar(&endPort, "end-port", 25432, "End of port range for PostgreSQL instances")
-	cmd.Flags().StringVar(&logLevel, "log-level", "", "Log level (debug, info, warn, error)")
+	cmd.Flags().IntVar(&startPort, "start-port", 15432, "Start of port range for database instances")
+	cmd.Flags().IntVar(&endPort, "end-port", 25432, "End of port range for database instances")
 
 	return cmd
 }
 
-// newPostgresCommand creates the postgres command group.
-func newPostgresCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "postgres",
-		Short: "PostgreSQL instance management commands",
-		Long:  "Commands for managing PostgreSQL instances outside of the MCP protocol.",
+// runMCPServe runs the MCP server.
+func runMCPServe(startPort, endPort int) error {
+	// Create MCP server
+	config := mcp.ServerConfig{
+		Name:      "dev-postgres-mcp",
+		Version:   "1.0.0",
+		StartPort: startPort,
+		EndPort:   endPort,
+		LogLevel:  "info",
+	}
+	server, err := mcp.NewServer(config)
+	if err != nil {
+		return fmt.Errorf("failed to create MCP server: %w", err)
+	}
+	defer server.Close()
+
+	// Set up signal handling for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		fmt.Fprintln(os.Stderr, "\nReceived interrupt signal, shutting down...")
+		cancel()
+	}()
+
+	// Start the server
+	if err := server.Start(ctx); err != nil {
+		if ctx.Err() != nil {
+			// Context was cancelled, this is expected during shutdown
+			return nil
+		}
+		// Server error
+		return err
 	}
 
-	cmd.AddCommand(newPostgresListCommand())
-	cmd.AddCommand(newPostgresDropCommand())
+	return nil
+}
+
+// newDatabaseCommand creates the database command group.
+func newDatabaseCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "database",
+		Short:   "Database instance management commands",
+		Long:    "Commands for managing database instances (PostgreSQL, MySQL, MariaDB) outside of the MCP protocol.",
+		Aliases: []string{"db"},
+	}
+
+	cmd.AddCommand(newDatabaseListCommand())
+	cmd.AddCommand(newDatabaseGetCommand())
+	cmd.AddCommand(newDatabaseDropCommand())
 
 	return cmd
 }
 
-// newPostgresListCommand creates the postgres list command.
-func newPostgresListCommand() *cobra.Command {
+// DropOptions holds options for dropping instances.
+type DropOptions struct {
+	Force bool
+}
+
+// Database command implementations
+
+// newDatabaseListCommand creates the database list command.
+func newDatabaseListCommand() *cobra.Command {
 	var format string
 	var startPort int
 	var endPort int
+	var dbType string
 
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List all running PostgreSQL instances",
-		Long: `List all currently running PostgreSQL instances managed by this server.
+		Short: "List all running database instances",
+		Long: `List all currently running database instances managed by this server.
 
 This command shows details about each instance including:
   • Instance ID
+  • Database Type (PostgreSQL, MySQL, MariaDB)
   • Container ID
   • Port number
   • Database name
   • Status
   • Creation time`,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return runPostgresList(format, startPort, endPort)
+			return runDatabaseList(format, startPort, endPort, dbType)
 		},
 	}
 
 	cmd.Flags().StringVar(&format, "format", "table", "Output format (table, json)")
-	cmd.Flags().IntVar(&startPort, "start-port", 15432, "Start of port range for PostgreSQL instances")
-	cmd.Flags().IntVar(&endPort, "end-port", 25432, "End of port range for PostgreSQL instances")
+	cmd.Flags().IntVar(&startPort, "start-port", 15432, "Start of port range for database instances")
+	cmd.Flags().IntVar(&endPort, "end-port", 25432, "End of port range for database instances")
+	cmd.Flags().StringVar(&dbType, "type", "", "Filter by database type (postgresql, mysql, mariadb)")
 
 	return cmd
 }
 
-// newPostgresDropCommand creates the postgres drop command.
-func newPostgresDropCommand() *cobra.Command {
+// newDatabaseGetCommand creates the database get command.
+func newDatabaseGetCommand() *cobra.Command {
+	var startPort int
+	var endPort int
+
+	cmd := &cobra.Command{
+		Use:   "get <instance-id>",
+		Short: "Get details of a specific database instance",
+		Long: `Get detailed information about a specific database instance by its ID.
+
+This command shows comprehensive details about the instance including:
+  • Instance ID and type
+  • Container information
+  • Connection details (DSN)
+  • Current status
+  • Resource allocation`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			instanceID := args[0]
+			return runDatabaseGet(instanceID, startPort, endPort)
+		},
+	}
+
+	cmd.Flags().IntVar(&startPort, "start-port", 15432, "Start of port range for database instances")
+	cmd.Flags().IntVar(&endPort, "end-port", 25432, "End of port range for database instances")
+
+	return cmd
+}
+
+// newDatabaseDropCommand creates the database drop command.
+func newDatabaseDropCommand() *cobra.Command {
 	var startPort int
 	var endPort int
 	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "drop <instance-id>",
-		Short: "Drop a PostgreSQL instance",
-		Long: `Drop (remove) a specific PostgreSQL instance by its ID.
+		Short: "Drop a database instance",
+		Long: `Drop (remove) a specific database instance by its ID.
 
 This command will:
-  • Stop the PostgreSQL container
+  • Stop the database container
   • Remove the container and all associated data
   • Free up the allocated port
   • Clean up all resources
@@ -185,19 +274,19 @@ WARNING: This action is irreversible. All data in the instance will be lost.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			instanceID := args[0]
-			return runPostgresDrop(instanceID, startPort, endPort, DropOptions{Force: force})
+			return runDatabaseDrop(instanceID, startPort, endPort, DropOptions{Force: force})
 		},
 	}
 
-	cmd.Flags().IntVar(&startPort, "start-port", 15432, "Start of port range for PostgreSQL instances")
-	cmd.Flags().IntVar(&endPort, "end-port", 25432, "End of port range for PostgreSQL instances")
+	cmd.Flags().IntVar(&startPort, "start-port", 15432, "Start of port range for database instances")
+	cmd.Flags().IntVar(&endPort, "end-port", 25432, "End of port range for database instances")
 	cmd.Flags().BoolVar(&force, "force", false, "Force removal without confirmation")
 
 	return cmd
 }
 
-// runPostgresList lists all PostgreSQL instances.
-func runPostgresList(format string, startPort, endPort int) error {
+// runDatabaseList lists all database instances.
+func runDatabaseList(format string, startPort, endPort int, dbType string) error {
 	// Create Docker manager
 	dockerMgr, err := docker.NewManager(startPort, endPort)
 	if err != nil {
@@ -211,73 +300,60 @@ func runPostgresList(format string, startPort, endPort int) error {
 		return fmt.Errorf("Docker daemon is not accessible: %w", err)
 	}
 
-	// Create PostgreSQL manager
-	postgresManager := postgres.NewManager(dockerMgr)
+	// Create unified database manager
+	unifiedManager := database.NewUnifiedManager(dockerMgr)
 
 	// List instances
-	instances, err := postgresManager.ListInstances(ctx)
+	var instances []*types.DatabaseInstance
+	if dbType != "" {
+		dbTypeEnum := types.DatabaseType(dbType)
+		if !dbTypeEnum.IsValid() {
+			return fmt.Errorf("invalid database type: %s", dbType)
+		}
+		instances, err = unifiedManager.ListInstancesByType(ctx, dbTypeEnum)
+	} else {
+		instances, err = unifiedManager.ListInstances(ctx)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to list instances: %w", err)
 	}
 
-	// Output results
-	switch format {
-	case "json":
-		return outputInstancesJSON(instances)
-	case "table":
-		return outputInstancesTable(instances)
-	default:
-		return fmt.Errorf("unsupported format: %s", format)
-	}
-}
-
-// outputInstancesJSON outputs instances in JSON format.
-func outputInstancesJSON(instances []*types.PostgreSQLInstance) error {
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(map[string]any{
-		"count":     len(instances),
-		"instances": instances,
-	})
-}
-
-// outputInstancesTable outputs instances in table format.
-func outputInstancesTable(instances []*types.PostgreSQLInstance) error {
 	if len(instances) == 0 {
-		fmt.Println("No PostgreSQL instances are currently running.")
+		fmt.Println("No database instances are currently running.")
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	defer w.Flush()
-
-	// Header
-	fmt.Fprintln(w, "INSTANCE ID\tCONTAINER ID\tPORT\tDATABASE\tUSERNAME\tVERSION\tSTATUS\tCREATED")
-
-	// Rows
-	for _, instance := range instances {
-		fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
-			instance.ID[:12],          // Show short ID like Docker (12 chars)
-			instance.ContainerID[:12], // Show short container ID like Docker (12 chars)
-			instance.Port,
-			instance.Database,
-			instance.Username,
-			instance.Version,
-			instance.Status,
-			instance.CreatedAt.Format(time.RFC3339),
-		)
+	// Format output
+	switch format {
+	case "json":
+		output, err := json.MarshalIndent(instances, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal instances to JSON: %w", err)
+		}
+		fmt.Println(string(output))
+	case "table":
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "ID\tTYPE\tPORT\tDATABASE\tSTATUS\tCREATED")
+		for _, instance := range instances {
+			fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\n",
+				instance.ID,
+				instance.Type,
+				instance.Port,
+				instance.Database,
+				instance.Status,
+				instance.CreatedAt.Format(time.RFC3339))
+		}
+		w.Flush()
+	default:
+		return fmt.Errorf("unsupported format: %s", format)
 	}
 
 	return nil
 }
 
-// DropOptions contains options for dropping PostgreSQL instances.
-type DropOptions struct {
-	Force bool
-}
-
-// runPostgresDrop drops a PostgreSQL instance.
-func runPostgresDrop(instanceID string, startPort, endPort int, opts DropOptions) error {
+// runDatabaseGet gets details of a specific database instance.
+func runDatabaseGet(instanceID string, startPort, endPort int) error {
 	// Create Docker manager
 	dockerMgr, err := docker.NewManager(startPort, endPort)
 	if err != nil {
@@ -291,107 +367,75 @@ func runPostgresDrop(instanceID string, startPort, endPort int, opts DropOptions
 		return fmt.Errorf("Docker daemon is not accessible: %w", err)
 	}
 
-	// Create PostgreSQL manager
-	postgresManager := postgres.NewManager(dockerMgr)
+	// Create unified database manager
+	unifiedManager := database.NewUnifiedManager(dockerMgr)
+
+	// Get instance
+	instance, err := unifiedManager.GetInstance(ctx, instanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get instance: %w", err)
+	}
+
+	// Format output as JSON
+	output, err := json.MarshalIndent(instance, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal instance to JSON: %w", err)
+	}
+
+	fmt.Println(string(output))
+	return nil
+}
+
+// runDatabaseDrop drops a database instance.
+func runDatabaseDrop(instanceID string, startPort, endPort int, opts DropOptions) error {
+	// Create Docker manager
+	dockerMgr, err := docker.NewManager(startPort, endPort)
+	if err != nil {
+		return fmt.Errorf("failed to create Docker manager: %w", err)
+	}
+	defer dockerMgr.Close()
+
+	// Test Docker connection
+	ctx := context.Background()
+	if err := dockerMgr.Ping(ctx); err != nil {
+		return fmt.Errorf("Docker daemon is not accessible: %w", err)
+	}
+
+	// Create unified database manager
+	unifiedManager := database.NewUnifiedManager(dockerMgr)
 
 	// Get instance details first to verify it exists
-	instance, err := postgresManager.GetInstance(ctx, instanceID)
+	instance, err := unifiedManager.GetInstance(ctx, instanceID)
 	if err != nil {
 		return fmt.Errorf("instance %s not found: %w", instanceID, err)
 	}
 
-	// Confirmation prompt unless force is used
+	// Confirm deletion unless force flag is set
 	if !opts.Force {
-		fmt.Printf("WARNING: This will permanently delete PostgreSQL instance %s and all its data.\n", instanceID)
+		fmt.Printf("Are you sure you want to drop database instance %s (%s)? This action cannot be undone.\n", instance.ID, instance.Type)
 		fmt.Printf("Instance details:\n")
-		fmt.Printf("  ID: %s\n", instance.ID)
+		fmt.Printf("  Type: %s\n", instance.Type)
 		fmt.Printf("  Port: %d\n", instance.Port)
 		fmt.Printf("  Database: %s\n", instance.Database)
-		fmt.Printf("  Version: %s\n", instance.Version)
-		fmt.Printf("  Created: %s\n", instance.CreatedAt.Format(time.RFC3339))
-		fmt.Print("\nAre you sure you want to continue? (y/N): ")
+		fmt.Printf("  Status: %s\n", instance.Status)
+		fmt.Printf("\nType 'yes' to confirm: ")
 
-		var response string
-		fmt.Scanln(&response)
-		if response != "y" && response != "Y" && response != "yes" && response != "YES" {
+		var confirmation string
+		if _, err := fmt.Scanln(&confirmation); err != nil {
+			return fmt.Errorf("failed to read confirmation: %w", err)
+		}
+
+		if confirmation != "yes" {
 			fmt.Println("Operation cancelled.")
 			return nil
 		}
 	}
 
 	// Drop the instance
-	if err := postgresManager.DropInstance(ctx, instanceID); err != nil {
+	if err := unifiedManager.DropInstance(ctx, instanceID); err != nil {
 		return fmt.Errorf("failed to drop instance: %w", err)
 	}
 
-	fmt.Printf("PostgreSQL instance %s has been successfully dropped.\n", instanceID)
+	fmt.Printf("Database instance %s (%s) has been successfully dropped.\n", instance.ID, instance.Type)
 	return nil
-}
-
-// runMCPServe starts the MCP server.
-func runMCPServe(startPort, endPort int, logLevel string) error {
-	// Setup logging
-	loggingConfig := mcp.GetLoggingConfigFromEnv()
-	if logLevel != "" {
-		switch logLevel {
-		case "debug":
-			loggingConfig.Level = mcp.LogLevelDebug
-		case "info":
-			loggingConfig.Level = mcp.LogLevelInfo
-		case "warn":
-			loggingConfig.Level = mcp.LogLevelWarn
-		case "error":
-			loggingConfig.Level = mcp.LogLevelError
-		default:
-			return fmt.Errorf("invalid log level: %s", logLevel)
-		}
-	}
-	mcp.SetupLogging(loggingConfig)
-
-	// Create server configuration
-	config := mcp.ServerConfig{
-		Name:      "dev-postgres-mcp",
-		Version:   version.Version,
-		StartPort: startPort,
-		EndPort:   endPort,
-		LogLevel:  string(loggingConfig.Level),
-	}
-
-	// Create and start server
-	server, err := mcp.NewServer(config)
-	if err != nil {
-		return fmt.Errorf("failed to create MCP server: %w", err)
-	}
-
-	// Setup graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Handle shutdown signals
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		cancel()
-	}()
-
-	// Start server in a goroutine
-	serverErr := make(chan error, 1)
-	go func() {
-		serverErr <- server.Start(ctx)
-	}()
-
-	// Wait for shutdown signal or server error
-	select {
-	case <-ctx.Done():
-		// Graceful shutdown
-		if err := server.Stop(context.Background()); err != nil {
-			return fmt.Errorf("failed to stop server gracefully: %w", err)
-		}
-		return nil
-	case err := <-serverErr:
-		// Server error
-		return err
-	}
 }

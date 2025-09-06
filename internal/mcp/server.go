@@ -8,17 +8,17 @@ import (
 
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/stokaro/dev-postgres-mcp/internal/database"
 	"github.com/stokaro/dev-postgres-mcp/internal/docker"
-	"github.com/stokaro/dev-postgres-mcp/internal/postgres"
 )
 
-// Server represents the MCP server for PostgreSQL instance management.
+// Server represents the MCP server for database instance management.
 type Server struct {
-	mcpServer   *server.MCPServer
-	stdioServer *server.StdioServer
-	toolHandler *ToolHandler
-	manager     *postgres.Manager
-	dockerMgr   *docker.Manager
+	mcpServer      *server.MCPServer
+	stdioServer    *server.StdioServer
+	toolHandler    *ToolHandler
+	unifiedManager *database.UnifiedManager
+	dockerMgr      *docker.Manager
 }
 
 // ServerConfig holds configuration for the MCP server.
@@ -45,11 +45,11 @@ func NewServer(config ServerConfig) (*Server, error) {
 		return nil, fmt.Errorf("Docker daemon is not accessible: %w", err)
 	}
 
-	// Create PostgreSQL manager
-	postgresManager := postgres.NewManager(dockerMgr)
+	// Create unified database manager
+	unifiedManager := database.NewUnifiedManager(dockerMgr)
 
 	// Create tool handler
-	toolHandler := NewToolHandler(postgresManager)
+	toolHandler := NewToolHandler(unifiedManager)
 
 	// Create MCP server
 	mcpServer := server.NewMCPServer(config.Name, config.Version)
@@ -64,17 +64,17 @@ func NewServer(config ServerConfig) (*Server, error) {
 	stdioServer := server.NewStdioServer(mcpServer)
 
 	return &Server{
-		mcpServer:   mcpServer,
-		stdioServer: stdioServer,
-		toolHandler: toolHandler,
-		manager:     postgresManager,
-		dockerMgr:   dockerMgr,
+		mcpServer:      mcpServer,
+		stdioServer:    stdioServer,
+		toolHandler:    toolHandler,
+		unifiedManager: unifiedManager,
+		dockerMgr:      dockerMgr,
 	}, nil
 }
 
 // Start starts the MCP server.
 func (s *Server) Start(ctx context.Context) error {
-	slog.Info("Starting MCP server for PostgreSQL instance management")
+	slog.Info("Starting MCP server for database instance management")
 
 	// Start the stdio server
 	slog.Info("MCP server started, waiting for requests...")
@@ -85,9 +85,9 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) Stop(ctx context.Context) error {
 	slog.Info("Stopping MCP server")
 
-	// Cleanup all PostgreSQL instances
-	if err := s.manager.Cleanup(ctx); err != nil {
-		slog.Error("Failed to cleanup PostgreSQL instances", "error", err)
+	// Cleanup all database instances
+	if err := s.unifiedManager.Cleanup(ctx); err != nil {
+		slog.Error("Failed to cleanup database instances", "error", err)
 	}
 
 	// Close Docker manager
@@ -99,9 +99,27 @@ func (s *Server) Stop(ctx context.Context) error {
 	return nil
 }
 
+// Close closes the MCP server and cleans up resources.
+func (s *Server) Close() error {
+	ctx := context.Background()
+
+	// Cleanup all database instances
+	if err := s.unifiedManager.Cleanup(ctx); err != nil {
+		slog.Error("Failed to cleanup database instances", "error", err)
+	}
+
+	// Close Docker manager
+	if err := s.dockerMgr.Close(); err != nil {
+		slog.Error("Failed to close Docker manager", "error", err)
+		return err
+	}
+
+	return nil
+}
+
 // GetInstanceCount returns the number of currently managed instances.
 func (s *Server) GetInstanceCount() int {
-	return s.manager.GetInstanceCount()
+	return s.unifiedManager.GetInstanceCount()
 }
 
 // GetServerInfo returns information about the MCP server.

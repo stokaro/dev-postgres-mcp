@@ -63,7 +63,7 @@ func TestDSNGeneration(t *testing.T) {
 				Password: "testpass",
 				SSLMode:  "disable",
 				Options: map[string]string{
-					"connect_timeout": "10",
+					"connect_timeout":  "10",
 					"application_name": "test_app",
 				},
 			},

@@ -4,8 +4,7 @@ package types
 import (
 	"time"
 
-
-"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/container"
 )
 
 // PostgreSQLInstance represents a PostgreSQL database instance.

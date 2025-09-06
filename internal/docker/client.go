@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 
-
 	"github.com/docker/docker/api/types/container"
 	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"

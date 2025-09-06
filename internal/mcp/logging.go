@@ -58,7 +58,7 @@ func SetupLogging(config LoggingConfig) {
 	var handler slog.Handler
 
 	opts := &slog.HandlerOptions{
-		Level: level,
+		Level:     level,
 		AddSource: level == slog.LevelDebug, // Add source info for debug level
 	}
 
@@ -133,12 +133,12 @@ func LoggerWithContext(ctx context.Context, attrs ...slog.Attr) *slog.Logger {
 // LogMCPOperation logs an MCP operation with standard fields.
 func LogMCPOperation(ctx context.Context, operation string, attrs ...slog.Attr) {
 	logger := LoggerWithContext(ctx)
-	
+
 	baseAttrs := []slog.Attr{
 		slog.String("operation", operation),
 		slog.Time("timestamp", time.Now()),
 	}
-	
+
 	baseAttrs = append(baseAttrs, attrs...)
 	logger.LogAttrs(ctx, slog.LevelInfo, "MCP operation", baseAttrs...)
 }
@@ -146,13 +146,13 @@ func LogMCPOperation(ctx context.Context, operation string, attrs ...slog.Attr) 
 // LogDockerOperation logs a Docker operation with standard fields.
 func LogDockerOperation(ctx context.Context, operation string, containerID string, attrs ...slog.Attr) {
 	logger := LoggerWithContext(ctx)
-	
+
 	baseAttrs := []slog.Attr{
 		slog.String("operation", operation),
 		slog.String("container_id", containerID),
 		slog.Time("timestamp", time.Now()),
 	}
-	
+
 	baseAttrs = append(baseAttrs, attrs...)
 	logger.LogAttrs(ctx, slog.LevelInfo, "Docker operation", baseAttrs...)
 }
@@ -160,13 +160,13 @@ func LogDockerOperation(ctx context.Context, operation string, containerID strin
 // LogPostgreSQLOperation logs a PostgreSQL operation with standard fields.
 func LogPostgreSQLOperation(ctx context.Context, operation string, instanceID string, attrs ...slog.Attr) {
 	logger := LoggerWithContext(ctx)
-	
+
 	baseAttrs := []slog.Attr{
 		slog.String("operation", operation),
 		slog.String("instance_id", instanceID),
 		slog.Time("timestamp", time.Now()),
 	}
-	
+
 	baseAttrs = append(baseAttrs, attrs...)
 	logger.LogAttrs(ctx, slog.LevelInfo, "PostgreSQL operation", baseAttrs...)
 }
@@ -174,12 +174,12 @@ func LogPostgreSQLOperation(ctx context.Context, operation string, instanceID st
 // LogError logs an error with context and additional attributes.
 func LogError(ctx context.Context, err error, message string, attrs ...slog.Attr) {
 	logger := LoggerWithContext(ctx)
-	
+
 	baseAttrs := []slog.Attr{
 		slog.String("error", err.Error()),
 		slog.Time("timestamp", time.Now()),
 	}
-	
+
 	baseAttrs = append(baseAttrs, attrs...)
 	logger.LogAttrs(ctx, slog.LevelError, message, baseAttrs...)
 }
@@ -187,13 +187,13 @@ func LogError(ctx context.Context, err error, message string, attrs ...slog.Attr
 // LogPerformance logs performance metrics for operations.
 func LogPerformance(ctx context.Context, operation string, duration time.Duration, attrs ...slog.Attr) {
 	logger := LoggerWithContext(ctx)
-	
+
 	baseAttrs := []slog.Attr{
 		slog.String("operation", operation),
 		slog.Duration("duration", duration),
 		slog.Time("timestamp", time.Now()),
 	}
-	
+
 	baseAttrs = append(baseAttrs, attrs...)
 	logger.LogAttrs(ctx, slog.LevelInfo, "Performance metric", baseAttrs...)
 }
@@ -201,7 +201,7 @@ func LogPerformance(ctx context.Context, operation string, duration time.Duratio
 // LogHealthCheck logs health check results.
 func LogHealthCheck(ctx context.Context, instanceID string, status string, duration time.Duration, message string) {
 	logger := LoggerWithContext(ctx)
-	
+
 	logger.LogAttrs(ctx, slog.LevelInfo, "Health check completed",
 		slog.String("instance_id", instanceID),
 		slog.String("status", status),

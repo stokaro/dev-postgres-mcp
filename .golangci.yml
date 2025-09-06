@@ -249,3 +249,20 @@ linters:
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/stokaro/dev-postgres-mcp)
+  exclusions:
+    generated: lax
+    paths:
+      - 'third_party$'
+      - 'builtin$'
+      - 'examples$'

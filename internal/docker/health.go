@@ -28,9 +28,9 @@ const (
 
 // HealthCheck represents a health check result.
 type HealthCheck struct {
-	Status    HealthStatus `json:"status"`
-	Message   string       `json:"message"`
-	Timestamp time.Time    `json:"timestamp"`
+	Status    HealthStatus  `json:"status"`
+	Message   string        `json:"message"`
+	Timestamp time.Time     `json:"timestamp"`
 	Duration  time.Duration `json:"duration"`
 }
 

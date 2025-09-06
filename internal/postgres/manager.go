@@ -365,7 +365,7 @@ func generatePassword(length int) (string, error) {
 
 	// Use base64 encoding to ensure printable characters
 	password := base64.URLEncoding.EncodeToString(bytes)
-	
+
 	// Trim to desired length
 	if len(password) > length {
 		password = password[:length]
